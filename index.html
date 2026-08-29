@@ -1,0 +1,1284 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>VAMPIRE ASSCII</title>
+<style>
+  /* Un unico mundo visual a proposito: terminal de fosforo en un sotano. */
+  :root { color-scheme: dark; --tinta:#0c0f16; --sangre:#8b1c2b; }
+  html,body { margin:0; padding:0; height:100%; background:var(--tinta); overflow:hidden; }
+  body { display:block; }
+  #pantalla { display:block; width:100vw; height:100vh; outline:none; background:var(--tinta);
+              touch-action:none; -webkit-tap-highlight-color:transparent; }
+  #pantalla:focus-visible { outline:1px solid #33415c; outline-offset:-1px; }
+  /* Rejilla de barrido y vineta: venden el tubo de rayos catodicos y no cuestan fotogramas. */
+  /* Sin mix-blend-mode a proposito: mezclar cada fotograma cuesta FPS en equipos sin GPU. */
+  #crt { position:fixed; inset:0; pointer-events:none; z-index:2;
+         background:
+           repeating-linear-gradient(to bottom, rgba(0,0,0,.20) 0 1px, rgba(0,0,0,0) 1px 3px),
+           radial-gradient(ellipse 120% 100% at 50% 50%, rgba(0,0,0,0) 55%, rgba(4,5,8,.6) 100%); }
+  @media (prefers-reduced-motion: reduce) { #crt { background:none; } }
+</style>
+</head>
+<body>
+<canvas id="pantalla" tabindex="0" aria-label="Vampire Asscii, juego de supervivencia en modo texto"></canvas>
+<div id="crt"></div>
+<script>
+"use strict";
+/* ==========================================================================
+   VAMPIRE ASSCII — superviviente de hordas en modo texto
+   Todo el juego (mundo, HUD y menus) se dibuja como rejilla de caracteres.
+   ========================================================================== */
+
+/* ---------- Lienzo y rejilla de caracteres ------------------------------- */
+const cv  = document.getElementById("pantalla");
+const ctx = cv.getContext("2d", { alpha: false });
+const FUENTE = 'ui-monospace,SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace';
+
+let COLS = 0, FILAS = 0, celdaW = 0, celdaH = 0, ASPECTO = 2, dpr = 1, anchoCSS = 0, altoCSS = 0;
+/* Dos capas: el mundo se pinta desplazado a subcelda (scroll continuo) y la
+   interfaz va clavada a la rejilla. El mundo lleva una fila y columna de mas
+   para que el desplazamiento no deje un borde vacio. */
+let COLSM = 0, FILASM = 0;
+let bufM = null, colM = null, zM = null;
+let bufU = null, colU = null, zU = null, fondoU = null;
+let capa = 0;                                   // 0 = mundo, 1 = interfaz
+
+function redimensionar() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.max(320, window.innerWidth), H = Math.max(240, window.innerHeight);
+  anchoCSS = W; altoCSS = H;
+  cv.width  = Math.floor(W * dpr);
+  cv.height = Math.floor(H * dpr);
+  cv.style.width = W + "px";
+  cv.style.height = H + "px";
+
+  // Tamano de fuente para acercarnos a ~110 columnas sin bajar de 9px.
+  let tam = Math.max(9, Math.min(Math.floor(W / 110 / 0.6), Math.floor(H / 42)));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.font = tam + "px " + FUENTE;
+  celdaW = ctx.measureText("M").width;          // medido, nunca supuesto
+  celdaH = Math.round(tam * 1.06);
+  ASPECTO = celdaH / celdaW;                    // celda alta: ~2 unidades de mundo
+  COLS  = Math.max(20, Math.floor(W / celdaW));
+  FILAS = Math.max(14, Math.floor(H / celdaH));
+  COLSM = COLS + 2; FILASM = FILAS + 2;
+
+  bufM = new Array(COLSM * FILASM).fill(" ");
+  colM = new Array(COLSM * FILASM).fill(0);
+  zM   = new Int8Array(COLSM * FILASM);
+  bufU = new Array(COLS * FILAS).fill(" ");
+  colU = new Array(COLS * FILAS).fill(0);
+  zU   = new Int8Array(COLS * FILAS);
+  fondoU = new Int8Array(COLS * FILAS);
+  ctx.textBaseline = "top";
+}
+window.addEventListener("resize", redimensionar);
+
+/* Paleta: guardamos indices en el buffer y agrupamos por color al pintar. */
+const PAL = ["#0c0f16","#1d2536","#33415c","#6b7a99","#c8d2e4","#ffffff",
+             "#8b1c2b","#e03a4a","#ff8360","#ffd166","#7bd88f","#3fb98a",
+             "#59c2ff","#a06bff","#ff6ec7","#5a3a2a"];
+const C = { fondo:0, fondo2:1, muro:2, gris:3, claro:4, blanco:5,
+            sangre:6, rojo:7, naranja:8, oro:9, verde:10, verde2:11,
+            azul:12, morado:13, rosa:14, marron:15 };
+
+function limpiar() {
+  bufM.fill(" "); colM.fill(0); zM.fill(-100);
+  bufU.fill(" "); colU.fill(0); zU.fill(-100); fondoU.fill(0);
+  capa = 0;
+}
+
+function pon(c, f, ch, color, z) {
+  if (capa) {
+    if (c < 0 || f < 0 || c >= COLS || f >= FILAS) return;
+    const i = f * COLS + c;
+    if ((z | 0) < zU[i]) return;
+    bufU[i] = ch; colU[i] = color; zU[i] = z | 0;
+  } else {
+    if (c < 0 || f < 0 || c >= COLSM || f >= FILASM) return;
+    const i = f * COLSM + c;
+    if ((z | 0) < zM[i]) return;
+    bufM[i] = ch; colM[i] = color; zM[i] = z | 0;
+  }
+}
+/* Marca celdas de interfaz como opacas: si no, el mundo se cuela entre los
+   huecos de los caracteres del marco. */
+function fondoUI(c, f, color) {
+  if (c < 0 || f < 0 || c >= COLS || f >= FILAS) return;
+  fondoU[f * COLS + c] = color + 1;
+}
+function texto(c, f, s, color, z) {
+  for (let i = 0; i < s.length; i++) pon(c + i, f, s[i], color, z === undefined ? 60 : z);
+}
+function textoCentrado(f, s, color, z) { texto(Math.floor((COLS - s.length) / 2), f, s, color, z); }
+
+function caja(c, f, w, h, color, relleno) {
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const borde = (y === 0 || y === h - 1 || x === 0 || x === w - 1);
+    if (relleno) fondoUI(c + x, f + y, C.fondo);
+    if (!borde) continue;
+    let ch = (y === 0 || y === h - 1) ? "-" : "|";
+    if ((y === 0 || y === h - 1) && (x === 0 || x === w - 1)) ch = "+";
+    pon(c + x, f + y, ch, color, 55);
+  }
+}
+
+/* Pintado: recorre filas y agrupa tramos contiguos del mismo color. */
+function pintarCapa(buf, col, ancho, alto) {
+  for (let f = 0; f < alto; f++) {
+    const y = f * celdaH;
+    let inicio = -1, c0 = -1, tramo = "";
+    for (let c = 0; c <= ancho; c++) {
+      const i = f * ancho + c;
+      const ch = c < ancho ? buf[i] : " ";
+      const cl = c < ancho ? col[i] : -1;
+      if (ch !== " " && cl === c0 && inicio >= 0) { tramo += ch; continue; }
+      if (inicio >= 0) { ctx.fillStyle = PAL[c0]; ctx.fillText(tramo, inicio * celdaW, y); inicio = -1; tramo = ""; }
+      if (ch !== " ") { inicio = c; c0 = cl; tramo = ch; }
+    }
+  }
+}
+
+function pintar() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = PAL[C.fondo];
+  ctx.fillRect(0, 0, anchoCSS, altoCSS);
+  ctx.textBaseline = "top";
+
+  // Mundo: desplazado a subcelda, mas la sacudida, tambien en pixeles.
+  const sx = sacudida > 0.2 ? rnd(-1, 1) * sacudida * 0.55 : 0;
+  const sy = sacudida > 0.2 ? rnd(-1, 1) * sacudida * 0.3  : 0;
+  ctx.save();
+  ctx.translate(-desplX - celdaW + sx, -desplY - celdaH + sy);
+  pintarCapa(bufM, colM, COLSM, FILASM);
+  ctx.restore();
+
+  // Interfaz: primero los fondos opacos, agrupados por tramos.
+  for (let f = 0; f < FILAS; f++) {
+    let inicio = -1, cf = -1;
+    for (let c = 0; c <= COLS; c++) {
+      const v = c < COLS ? fondoU[f * COLS + c] : 0;
+      if (v && v === cf && inicio >= 0) continue;
+      if (inicio >= 0) {
+        ctx.fillStyle = PAL[cf - 1];
+        ctx.fillRect(inicio * celdaW, f * celdaH, (c - inicio) * celdaW, celdaH);
+        inicio = -1;
+      }
+      if (v) { inicio = c; cf = v; }
+    }
+  }
+  pintarCapa(bufU, colU, COLS, FILAS);
+}
+
+/* ---------- Utilidades ---------------------------------------------------- */
+const rnd  = (a, b) => a + Math.random() * (b - a);
+const rndi = (a, b) => Math.floor(rnd(a, b + 1));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function elegir(a) { return a[rndi(0, a.length - 1)]; }
+
+/* ---------- Sonido (bips sinteticos, sin ficheros externos) --------------- */
+let audio = null, silencio = false;
+function bip(freq, dur, tipo, vol) {
+  if (silencio) return;
+  try {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = tipo || "square"; o.frequency.value = freq;
+    g.gain.setValueAtTime((vol || 0.05), audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
+    o.connect(g); g.connect(audio.destination);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch (e) { /* sin audio, seguimos */ }
+}
+
+/* ---------- Entrada ------------------------------------------------------- */
+const teclas = Object.create(null);
+const TECLAS_JUEGO = new Set(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," ","Spacebar"]);
+addEventListener("keydown", e => {
+  if (TECLAS_JUEGO.has(e.key)) e.preventDefault();
+  teclas[e.key.toLowerCase()] = true;
+  if (!e.repeat) manejarTecla(e.key.toLowerCase());   // el autorepeat no debe alternar la pausa
+}, { passive: false });
+addEventListener("keyup", e => { teclas[e.key.toLowerCase()] = false; });
+addEventListener("blur", () => { for (const k in teclas) teclas[k] = false; });
+
+/* ---------- Definiciones de armas ---------------------------------------- */
+/* Cada arma: nivel 1..8, con stats por nivel y una funcion de disparo.       */
+const ARMAS = {
+  daga: {
+    nombre: "Daga arrojadiza", glifo: "\u2192", color: C.claro,
+    desc: "Lanza dagas al enemigo mas cercano.",
+    cd: n => 0.62 - 0.05 * (n - 1),
+    disparar(J, n) {
+      const cant = 1 + Math.floor(n / 2);
+      const dmg  = 11 + 4.5 * (n - 1);
+      const obj  = enemigoMasCercano(J.x, J.y, 42);
+      let ang = obj ? Math.atan2(obj.y - J.y, obj.x - J.x) : J.mira;
+      for (let i = 0; i < cant; i++) {
+        const a = ang + (i - (cant - 1) / 2) * 0.13;
+        nuevoProyectil(J.x, J.y, Math.cos(a) * 46, Math.sin(a) * 46, dmg * J.poder, 1 + Math.floor(n / 3), 1.6, glifoDir(a), C.claro);
+      }
+      bip(660, 0.04, "square", 0.03);
+    }
+  },
+  latigo: {
+    nombre: "Latigo", glifo: "\u2261", color: C.oro,
+    desc: "Golpea en abanico a los lados, alternando.",
+    cd: n => 1.1 - 0.07 * (n - 1),
+    disparar(J, n) {
+      const dmg = 14 + 7 * (n - 1);
+      const alcance = (13 + 1.6 * (n - 1)) * J.area;
+      const lados = n >= 3 ? [1, -1] : [J.latigoLado = -(J.latigoLado || -1)];
+      for (const s of lados) {
+        const cx = J.x + s * alcance * 0.5;
+        golpeArea(cx, J.y, alcance * 0.55, dmg * J.poder, 6);
+        for (let i = 0; i < 9; i++) {
+          efectos.push({ x: J.x + s * (2 + i * (alcance / 10)), y: J.y + rnd(-2.2, 2.2),
+                         vida: 0.16, t: 0.16, ch: s > 0 ? "=" : "=", color: C.oro });
+        }
+      }
+      bip(300, 0.06, "sawtooth", 0.04);
+    }
+  },
+  ajo: {
+    nombre: "Aura de ajo", glifo: "o", color: C.verde,
+    desc: "Dana sin parar a lo que te rodea y lo empuja.",
+    cd: n => 0.5,
+    disparar(J, n) {
+      const r = (7 + 1.5 * n) * J.area;
+      const dmg = (3 + 1.6 * (n - 1)) * J.poder;
+      for (const e of enemigosCerca(J.x, J.y, r)) {
+        danarEnemigo(e, dmg, 0.35);
+        const d = Math.hypot(e.x - J.x, e.y - J.y) || 1;
+        e.x += (e.x - J.x) / d * 0.6; e.y += (e.y - J.y) / d * 0.6;
+      }
+      J.auraR = r; J.auraT = 0.5;
+    }
+  },
+  orbitas: {
+    nombre: "Cruces orbitales", glifo: "+", color: C.azul,
+    desc: "Cruces que giran a tu alrededor.",
+    cd: n => 0.18,
+    disparar(J, n) {
+      const cant = 2 + Math.floor((n - 1) / 1.5);
+      const r = (9 + 0.9 * n) * J.area;
+      const dmg = (6 + 3 * (n - 1)) * J.poder;
+      J.orb = { cant, r, dmg };
+    }
+  },
+  rayo: {
+    nombre: "Rayo", glifo: "\u00a1", color: C.morado,
+    desc: "Cae sobre enemigos al azar.",
+    cd: n => 2.4 - 0.18 * (n - 1),
+    disparar(J, n) {
+      const golpes = 1 + Math.floor(n / 2);
+      const dmg = (26 + 12 * (n - 1)) * J.poder;
+      const cand = enemigosCerca(J.x, J.y, 70);
+      if (!cand.length) return;
+      for (let i = 0; i < golpes; i++) {
+        const e = elegir(cand);
+        golpeArea(e.x, e.y, 5 * J.area, dmg, 5);
+        for (let k = 0; k < 7; k++)
+          efectos.push({ x: e.x + rnd(-1, 1), y: e.y - k * 2.2, vida: 0.22, t: 0.22, ch: k % 2 ? "\\" : "/", color: C.morado });
+      }
+      bip(120, 0.12, "sawtooth", 0.05);
+    }
+  },
+  biblia: {
+    nombre: "Biblia maldita", glifo: "\u00a7", color: C.rosa,
+    desc: "Libros que orbitan lejos y atraviesan todo.",
+    cd: n => 4.0 - 0.25 * (n - 1),
+    disparar(J, n) {
+      const cant = 1 + Math.floor(n / 2);
+      for (let i = 0; i < cant; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const p = nuevoProyectil(J.x, J.y, 0, 0, (10 + 5 * (n - 1)) * J.poder, 999, 3.2, "\u00a7", C.rosa);
+        p.orbita = { a, r: 0, rMax: (16 + n) * J.area, vel: 3.4 };
+      }
+      bip(520, 0.08, "triangle", 0.035);
+    }
+  }
+};
+
+/* Mejoras pasivas */
+const PASIVAS = {
+  botas:   { nombre: "Botas aladas",  desc: "+12% velocidad",        max: 5, glifo: "\u00bb", color: C.verde2, aplicar: J => J.velBase *= 1.12 },
+  corazon: { nombre: "Corazon",       desc: "+20 vida max y cura",   max: 5, glifo: "\u2665", color: C.rojo,   aplicar: J => { J.vidaMax += 20; J.vida = Math.min(J.vidaMax, J.vida + 20); } },
+  furia:   { nombre: "Furia",         desc: "+15% dano",             max: 5, glifo: "\u2191", color: C.naranja,aplicar: J => J.poder *= 1.15 },
+  reloj:   { nombre: "Reloj roto",    desc: "-12% enfriamiento",     max: 5, glifo: "\u00b0", color: C.azul,   aplicar: J => J.cd *= 0.88 },
+  esfera:  { nombre: "Esfera",        desc: "+20% area",             max: 5, glifo: "()",     color: C.morado, aplicar: J => J.area *= 1.20 },
+  iman:    { nombre: "Iman",          desc: "+40% radio de recogida",max: 5, glifo: "U",      color: C.oro,    aplicar: J => J.iman *= 1.40 },
+  armadura:{ nombre: "Armadura",      desc: "-1 dano recibido",      max: 5, glifo: "#",      color: C.gris,   aplicar: J => J.armadura += 1 },
+  vendas:  { nombre: "Vendas",        desc: "+0.4 vida/seg",         max: 4, glifo: "+",      color: C.verde,  aplicar: J => J.regen += 0.4 }
+};
+
+/* ---------- Progreso permanente (tienda y personajes) --------------------- */
+/* Se guarda en localStorage; si el navegador lo bloquea, la partida sigue
+   funcionando y el progreso solo dura la sesion. */
+const CLAVE = "vampire-asscii-v1";
+let guardado = { oro: 0, mejoras: {}, personajes: ["aldeano"], elegido: "aldeano", record: 0, mejorNivel: 1 };
+
+function cargarProgreso() {
+  try {
+    const s = localStorage.getItem(CLAVE);
+    if (s) Object.assign(guardado, JSON.parse(s));
+  } catch (e) { /* sin almacenamiento, progreso solo en memoria */ }
+}
+function guardarProgreso() {
+  try { localStorage.setItem(CLAVE, JSON.stringify(guardado)); } catch (e) { /* idem */ }
+}
+
+/* Mejoras permanentes: se compran con oro y valen para todas las partidas. */
+const TIENDA = {
+  vigor:    { nombre: "Vigor",      desc: "+12% vida maxima",      max: 5, coste: 60,  inc: 45, glifo: "♥" },
+  fuerza:   { nombre: "Fuerza",     desc: "+8% dano",              max: 5, coste: 80,  inc: 65, glifo: "↑" },
+  prisa:    { nombre: "Prisa",      desc: "+5% velocidad",         max: 4, coste: 70,  inc: 55, glifo: "»" },
+  pulso:    { nombre: "Pulso",      desc: "-5% enfriamiento",      max: 4, coste: 90,  inc: 70, glifo: "°" },
+  magnetita:{ nombre: "Magnetita",  desc: "+20% radio de recogida",max: 3, coste: 70,  inc: 60, glifo: "U" },
+  codicia:  { nombre: "Codicia",    desc: "+25% oro que sueltan",  max: 4, coste: 100, inc: 80, glifo: "$" },
+  coraza:   { nombre: "Coraza",     desc: "-1 dano recibido",      max: 3, coste: 120, inc: 100,glifo: "#" },
+  reliquia: { nombre: "Reliquia",   desc: "revives una vez",       max: 1, coste: 500, inc: 0,  glifo: "✝" }
+};
+const costeMejora = (id) => TIENDA[id].coste + TIENDA[id].inc * (guardado.mejoras[id] || 0);
+
+/* Personajes: cambian el arma inicial y el reparto de estadisticas. */
+const PERSONAJES = [
+  { id:"aldeano",     glifo:"@", nombre:"Aldeano",     arma:"daga",
+    desc:"Equilibrado. La escuela clasica.",        coste:0,   vida:100, vel:14.5, poder:1,    area:1,   cd:1,    armadura:0 },
+  { id:"cazadora",    glifo:"Y", nombre:"Cazadora",    arma:"latigo",
+    desc:"Veloz y fragil. Golpea a los lados.",     coste:150, vida:80,  vel:17.0, poder:1,    area:1.1, cd:1,    armadura:0 },
+  { id:"monje",       glifo:"&", nombre:"Monje",       arma:"ajo",
+    desc:"Lento, pero su aura es enorme.",          coste:250, vida:130, vel:12.5, poder:0.9,  area:1.4, cd:1,    armadura:0 },
+  { id:"sepulturero", glifo:"#", nombre:"Sepulturero", arma:"orbitas",
+    desc:"Duro como una lapida.",                   coste:400, vida:170, vel:12.0, poder:1,    area:1.15,cd:1.05, armadura:2 },
+  { id:"alquimista",  glifo:"%", nombre:"Alquimista",  arma:"rayo",
+    desc:"Pega como un tren, aguanta como un vaso.",coste:550, vida:70,  vel:14.5, poder:1.3,  area:1,   cd:1,    armadura:0 },
+  { id:"hereje",      glifo:"!", nombre:"Hereje",      arma:"biblia",
+    desc:"Cadencia infernal y buen iman.",          coste:700, vida:90,  vel:14.5, poder:1,    area:1,   cd:0.82, armadura:0 }
+];
+const personajePorId = id => PERSONAJES.find(p => p.id === id) || PERSONAJES[0];
+
+/* ---------- Tipos de enemigo --------------------------------------------- */
+const TIPOS = [
+  { id:"z", ch:"z", nombre:"zombi",     color:C.verde2, vida:14,  vel:7.4,  dmg:6,  xp:1, desde:0   },
+  { id:"v", ch:"v", nombre:"murcielago",color:C.morado, vida:8,   vel:12.5, dmg:4,  xp:1, desde:35  },
+  { id:"S", ch:"S", nombre:"esqueleto", color:C.claro,  vida:34,  vel:8.4,  dmg:9,  xp:2, desde:80  },
+  { id:"w", ch:"w", nombre:"lobo",      color:C.gris,   vida:26,  vel:13.6, dmg:8,  xp:2, desde:150 },
+  { id:"O", ch:"O", nombre:"ogro",      color:C.sangre, vida:120, vel:6.0,  dmg:16, xp:6, desde:210 },
+  { id:"W", ch:"W", nombre:"espectro",  color:C.azul,   vida:70,  vel:10.2, dmg:12, xp:5, desde:300 }
+];
+
+/* ---------- Estado -------------------------------------------------------- */
+let J, enemigos, proyectiles, gemas, curas, monedas, efectos, flotantes;
+let tiempo, matados, oleada, proxSpawn, cam, estado, opciones, seleccion, jefeProx, sacudida;
+let oroRun = 0, botinRun = 0, menuSel = 0, avisoTienda = "", avisoT = 0, avisoColor = 0, ultimaBaseMenu = 0;
+
+function nuevoJugador() {
+  const P = personajePorId(guardado.elegido);
+  const m = guardado.mejoras;
+  const niv = id => m[id] || 0;
+
+  const J = {
+    x: 0, y: 0, xPrev: 0, yPrev: 0, glifo: P.glifo, personaje: P.id, mira: 0,
+    vida: 100, vidaMax: 100, velBase: P.vel, nivel: 1, xp: 0, xpProx: 4, pendientes: 0,
+    poder: P.poder, cd: P.cd, area: P.area, iman: 1, codicia: 1, revivir: 0,
+    armadura: P.armadura, regen: 0, invul: 0, auraR: 0, auraT: 0, orb: null, orbA: 0,
+    armas: {}, pasivas: {}, temporiz: {}
+  };
+  J.armas[P.arma] = 1;
+  J.temporiz[P.arma] = 0;
+
+  // Mejoras compradas en la tienda, encima de la base del personaje.
+  J.vidaMax  = Math.round(P.vida * (1 + 0.12 * niv("vigor")));
+  J.vida     = J.vidaMax;
+  J.poder   *= 1 + 0.08 * niv("fuerza");
+  J.velBase *= 1 + 0.05 * niv("prisa");
+  J.cd      *= 1 - 0.05 * niv("pulso");
+  J.iman    *= 1 + 0.20 * niv("magnetita");
+  J.codicia += 0.25 * niv("codicia");
+  J.armadura += niv("coraza");
+  J.revivir  = niv("reliquia");
+  return J;
+}
+
+function reiniciar() {
+  J = nuevoJugador();
+  enemigos = []; proyectiles = []; gemas = []; curas = []; monedas = []; efectos = []; flotantes = [];
+  oroRun = 0; botinRun = 0;
+  tiempo = 0; matados = 0; oleada = 0; proxSpawn = 0; jefeProx = 60; sacudida = 0;
+  cam = { x: 0, y: 0 };
+  estado = "titulo"; opciones = null; seleccion = 0;
+}
+
+/* ---------- Rejilla espacial para enemigos -------------------------------- */
+const CELDA_HASH = 6;
+let hashMap = new Map();
+function reconstruirHash() {
+  hashMap.clear();
+  for (const e of enemigos) {
+    const k = (Math.floor(e.x / CELDA_HASH) * 73856093) ^ (Math.floor(e.y / CELDA_HASH) * 19349663);
+    let a = hashMap.get(k); if (!a) hashMap.set(k, a = []);
+    a.push(e);
+  }
+}
+function enemigosCerca(x, y, r) {
+  const res = [], r2 = r * r, c0 = Math.floor((x - r) / CELDA_HASH), c1 = Math.floor((x + r) / CELDA_HASH);
+  const f0 = Math.floor((y - r) / CELDA_HASH), f1 = Math.floor((y + r) / CELDA_HASH);
+  for (let c = c0; c <= c1; c++) for (let f = f0; f <= f1; f++) {
+    const a = hashMap.get((c * 73856093) ^ (f * 19349663));
+    if (!a) continue;
+    for (const e of a) { const dx = e.x - x, dy = e.y - y; if (dx * dx + dy * dy <= r2) res.push(e); }
+  }
+  return res;
+}
+function enemigoMasCercano(x, y, rmax) {
+  let mejor = null, md = rmax * rmax;
+  for (const e of enemigos) { const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy; if (d < md) { md = d; mejor = e; } }
+  return mejor;
+}
+
+/* ---------- Fabricas ------------------------------------------------------ */
+function glifoDir(a) {
+  const g = ["\u2192","\\","|","/","\u2190","\\","|","/"];
+  return g[(Math.round(a / (Math.PI / 4)) + 8) % 8];
+}
+function nuevoProyectil(x, y, vx, vy, dmg, pierce, vida, ch, color) {
+  const p = { x, y, vx, vy, dmg, pierce, vida, ch, color, golpeados: new Set(), orbita: null };
+  proyectiles.push(p); return p;
+}
+function golpeArea(x, y, r, dmg, sacude) {
+  for (const e of enemigosCerca(x, y, r)) danarEnemigo(e, dmg, 0.1);
+  sacudida = Math.max(sacudida, sacude || 0);
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2;
+    efectos.push({ x: x + Math.cos(a) * r * 0.7, y: y + Math.sin(a) * r * 0.7, vida: 0.18, t: 0.18, ch: "*", color: C.naranja });
+  }
+}
+function danarEnemigo(e, dmg, parpadeo) {
+  if (e.vida <= 0) return;
+  e.vida -= dmg; e.flash = parpadeo || 0.08;
+  // Sin esto la pantalla se llena de cifras y deja de leerse la horda.
+  if (flotantes.length < 16 && (e.jefe || dmg >= 30 || Math.random() < 0.12))
+    flotantes.push({ x: e.x, y: e.y, t: 0.5, vida: 0.5, txt: String(Math.round(dmg)), color: dmg > 25 ? C.naranja : C.claro });
+  if (e.vida <= 0) matarEnemigo(e);
+}
+function matarEnemigo(e) {
+  matados++;
+  gemas.push({ x: e.x, y: e.y, xp: e.xp, vx: rnd(-6, 6), vy: rnd(-6, 6), t: 0 });
+  // Los enemigos gordos y los jefes sueltan carne: el unico modo de curarse sin pasivas.
+  if (e.jefe || (e.tipo.vida >= 70 && Math.random() < 0.12)) curas.push({ x: e.x, y: e.y, t: 0 });
+  // Monedas: es el oro que se lleva a la tienda entre partidas.
+  const monto = e.jefe ? rndi(30, 50) : (Math.random() < 0.18 ? rndi(2, 5) : 0);
+  if (monto > 0) monedas.push({ x: e.x, y: e.y, oro: Math.max(1, Math.round(monto * J.codicia)), t: 0 });
+  for (let i = 0; i < 3; i++)
+    efectos.push({ x: e.x + rnd(-1.5, 1.5), y: e.y + rnd(-1.5, 1.5), vida: 0.25, t: 0.25, ch: elegir(["\u00b7","'",","]), color: C.sangre });
+  bip(180 + Math.random() * 60, 0.05, "square", 0.025);
+}
+
+/* ---------- Aparicion de enemigos ----------------------------------------- */
+function factorDificultad() { return 1 + tiempo / 140 + Math.pow(tiempo / 260, 2); }
+
+/* Punto justo fuera del borde visible: la horda entra en escena enseguida. */
+function puntoBorde(margen) {
+  const hw = COLS / 2 + (margen || 3), hh = (FILAS * ASPECTO) / 2 + (margen || 3);
+  const t = Math.random();
+  switch (rndi(0, 3)) {
+    case 0: return { x: J.x - hw + t * hw * 2, y: J.y - hh };
+    case 1: return { x: J.x - hw + t * hw * 2, y: J.y + hh };
+    case 2: return { x: J.x - hw, y: J.y - hh + t * hh * 2 };
+    default:return { x: J.x + hw, y: J.y - hh + t * hh * 2 };
+  }
+}
+
+function aparecerEnemigo(tipo, margen) {
+  const p = puntoBorde(margen);
+  const f = factorDificultad();
+  return {
+    x: p.x, y: p.y,
+    ch: tipo.ch, color: tipo.color, tipo,
+    vida: tipo.vida * f, vidaMax: tipo.vida * f,
+    vel: tipo.vel * (1 + Math.min(0.5, tiempo / 600)) * rnd(0.9, 1.1),
+    dmg: tipo.dmg * (1 + tiempo / 300), xp: tipo.xp, flash: 0, empuje: 0, tgolpe: 0, jefe: false
+  };
+}
+
+function directorSpawn(dt) {
+  proxSpawn -= dt;
+  const ritmo = clamp(0.95 - tiempo / 320, 0.11, 0.95);
+  const tope  = Math.min(380, 70 + tiempo * 1.1);   // techo de horda viva
+  if (proxSpawn <= 0 && enemigos.length < tope) {
+    proxSpawn = ritmo;
+    const disp = TIPOS.filter(t => tiempo >= t.desde);
+    const cant = 1 + Math.floor(tiempo / 90);
+    for (let i = 0; i < cant; i++) enemigos.push(aparecerEnemigo(elegir(disp)));
+  }
+  // Oleada cerrada cada 30 s: un anillo que rodea al jugador.
+  if (tiempo > oleada * 30 && tiempo > 20) {
+    oleada++;
+    const t = elegir(TIPOS.filter(x => tiempo >= x.desde));
+    const n = 10 + oleada * 3, rx = COLS / 2 + 4, ry = (FILAS * ASPECTO) / 2 + 4;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, e = aparecerEnemigo(t);
+      e.x = J.x + Math.cos(a) * rx; e.y = J.y + Math.sin(a) * ry;
+      enemigos.push(e);
+    }
+    flotantes.push({ x: J.x, y: J.y - 8, t: 1.6, vida: 1.6, txt: "\u00a1OLEADA!", color: C.rojo });
+  }
+  // Jefe cada 60 s.
+  if (tiempo >= jefeProx) {
+    jefeProx += 60;
+    const base = TIPOS[TIPOS.length - 1], e = aparecerEnemigo(base, 5);
+    e.jefe = true; e.ch = "\u03a9"; e.color = C.rojo;
+    e.vida = e.vidaMax = base.vida * factorDificultad() * 14;
+    e.vel = 5.2; e.dmg *= 1.6; e.xp = 60;
+    enemigos.push(e);
+    flotantes.push({ x: J.x, y: J.y - 10, t: 2.2, vida: 2.2, txt: "\u00a1\u00a1JEFE!!", color: C.rojo });
+    bip(80, 0.5, "sawtooth", 0.06);
+  }
+}
+
+/* ---------- Fin de partida ------------------------------------------------ */
+function terminarPartida() {
+  estado = "fin";
+  // Botin por aguantar: sin esto, una partida larga sin matar mucho no daba casi oro.
+  botinRun = Math.floor(tiempo / 8) + J.nivel * 3;
+  // El oro de la partida se ingresa aqui: es lo que se gasta en la tienda.
+  guardado.oro += oroRun + botinRun;
+  if (tiempo > guardado.record) guardado.record = tiempo;
+  if (J.nivel > guardado.mejorNivel) guardado.mejorNivel = J.nivel;
+  guardarProgreso();
+  bip(70, 0.9, "sawtooth", 0.07);
+}
+
+/* ---------- Subida de nivel ----------------------------------------------- */
+function generarOpciones() {
+  const pool = [];
+  for (const id in ARMAS) {
+    const n = J.armas[id] || 0;
+    if (n === 0 && Object.keys(J.armas).length >= 5) continue;
+    if (n >= 8) continue;
+    pool.push({ tipo: "arma", id, nivel: n + 1,
+      nombre: ARMAS[id].nombre, desc: n === 0 ? ARMAS[id].desc : "Sube a nivel " + (n + 1),
+      glifo: ARMAS[id].glifo, color: ARMAS[id].color, peso: n === 0 ? 3 : 4 });
+  }
+  for (const id in PASIVAS) {
+    const n = J.pasivas[id] || 0;
+    if (n >= PASIVAS[id].max) continue;
+    pool.push({ tipo: "pasiva", id, nivel: n + 1, nombre: PASIVAS[id].nombre,
+      desc: PASIVAS[id].desc, glifo: PASIVAS[id].glifo, color: PASIVAS[id].color, peso: 3 });
+  }
+  const sel = [];
+  let bolsa = [];
+  for (const o of pool) for (let i = 0; i < o.peso; i++) bolsa.push(o);
+  while (sel.length < 3 && bolsa.length) {
+    const o = elegir(bolsa);
+    sel.push(o);
+    bolsa = bolsa.filter(x => !(x.tipo === o.tipo && x.id === o.id));
+  }
+  if (!sel.length) sel.push({ tipo: "cura", id: "cura", nombre: "Festin", desc: "Recupera 40 de vida", glifo: "\u2665", color: C.rojo });
+  return sel;
+}
+
+function aplicarOpcion(o) {
+  if (o.tipo === "arma") {
+    J.armas[o.id] = (J.armas[o.id] || 0) + 1;
+    if (J.temporiz[o.id] === undefined) J.temporiz[o.id] = 0;
+  } else if (o.tipo === "pasiva") {
+    J.pasivas[o.id] = (J.pasivas[o.id] || 0) + 1;
+    PASIVAS[o.id].aplicar(J);
+  } else {
+    J.vida = Math.min(J.vidaMax, J.vida + 40);
+  }
+  J.pendientes = Math.max(0, J.pendientes - 1);
+  estado = "juego"; opciones = null;
+  bip(880, 0.09, "triangle", 0.05);
+}
+
+/* Los niveles se encolan: cada uno abrira su propio menu, uno detras de otro. */
+function subirNivel() {
+  J.nivel++;
+  J.xp -= J.xpProx;
+  J.xpProx = Math.round(J.xpProx * 1.25 + 2);
+  J.pendientes++;
+}
+function abrirMenuPendiente() {
+  if (J.pendientes <= 0 || estado !== "juego") return;
+  opciones = generarOpciones(); seleccion = 0; estado = "nivel";
+  bip(520, 0.08, "triangle", 0.05); setTimeout(() => bip(780, 0.1, "triangle", 0.05), 90);
+}
+
+/* ---------- Actualizacion ------------------------------------------------- */
+const PASO = 1 / 60;
+
+function actualizar(dt) {
+  tiempo += dt;
+  J.xPrev = J.x; J.yPrev = J.y;
+  if (sacudida > 0) sacudida = Math.max(0, sacudida - dt * 22);
+
+  /* Movimiento del jugador */
+  let mx = 0, my = 0;
+  if (teclas["a"] || teclas["arrowleft"])  mx -= 1;
+  if (teclas["d"] || teclas["arrowright"]) mx += 1;
+  if (teclas["w"] || teclas["arrowup"])    my -= 1;
+  if (teclas["s"] || teclas["arrowdown"])  my += 1;
+  if (!mx && !my && puntero) {
+    // Tactil o raton mantenido: el jugador va hacia donde tocas (el esta siempre en el centro).
+    const r = cv.getBoundingClientRect();
+    const px = puntero.x - r.left - r.width / 2, py = puntero.y - r.top - r.height / 2;
+    if (Math.hypot(px, py) > 10) { mx = px; my = py; }
+  }
+  if (mx || my) {
+    const l = Math.hypot(mx, my);
+    J.x += (mx / l) * J.velBase * dt;
+    J.y += (my / l) * J.velBase * dt;
+    J.mira = Math.atan2(my, mx);
+  }
+  if (J.regen) J.vida = Math.min(J.vidaMax, J.vida + J.regen * dt);
+  if (J.invul > 0) J.invul -= dt;
+  if (J.auraT > 0) J.auraT -= dt;
+
+  reconstruirHash();
+
+  /* Armas */
+  for (const id in J.armas) {
+    const n = J.armas[id], A = ARMAS[id];
+    J.temporiz[id] = (J.temporiz[id] || 0) - dt;
+    if (J.temporiz[id] <= 0) {
+      J.temporiz[id] = Math.max(0.05, A.cd(n) * J.cd);
+      A.disparar(J, n);
+    }
+  }
+
+  /* Cruces orbitales */
+  if (J.orb) {
+    J.orbA += dt * 2.6;
+    for (let i = 0; i < J.orb.cant; i++) {
+      const a = J.orbA + (i / J.orb.cant) * Math.PI * 2;
+      const ox = J.x + Math.cos(a) * J.orb.r, oy = J.y + Math.sin(a) * J.orb.r;
+      for (const e of enemigosCerca(ox, oy, 2.4)) {
+        if (e.tgolpe > tiempo) continue;
+        e.tgolpe = tiempo + 0.25;
+        danarEnemigo(e, J.orb.dmg, 0.1);
+      }
+    }
+  }
+
+  /* Enemigos */
+  for (let i = enemigos.length - 1; i >= 0; i--) {
+    const e = enemigos[i];
+    if (e.vida <= 0) { enemigos.splice(i, 1); continue; }
+    if (e.flash > 0) e.flash -= dt;
+    const dx = J.x - e.x, dy = J.y - e.y, d = Math.hypot(dx, dy) || 1;
+    if (!e.jefe && d > COLS * 1.6) { enemigos.splice(i, 1); continue; }   // fuera de alcance: reciclar
+    e.x += (dx / d) * e.vel * dt;
+    e.y += (dy / d) * e.vel * dt;
+    // Separacion para que la horda no se apile en una sola celda
+    const vec = enemigosCerca(e.x, e.y, 1.7);
+    for (const o of vec) {
+      if (o === e) continue;
+      const ox = e.x - o.x, oy = e.y - o.y, od = Math.hypot(ox, oy) || 0.001;
+      if (od < 1.7) { e.x += (ox / od) * 8 * dt; e.y += (oy / od) * 8 * dt; }
+    }
+    if (d < 1.6 && J.invul <= 0) {
+      const dano = Math.max(1, e.dmg - J.armadura);
+      J.vida -= dano; J.invul = 0.7; sacudida = Math.max(sacudida, 4);
+      flotantes.push({ x: J.x, y: J.y - 2, t: 0.6, vida: 0.6, txt: "-" + Math.round(dano), color: C.rojo });
+      bip(90, 0.12, "square", 0.05);
+      if (J.vida <= 0) {
+        if (J.revivir > 0) {                 // la Reliquia de la tienda
+          J.revivir--;
+          J.vida = J.vidaMax; J.invul = 3; sacudida = 12;
+          golpeArea(J.x, J.y, 26 * J.area, 9999, 10);
+          flotantes.push({ x: J.x, y: J.y - 4, t: 2, vida: 2, txt: "¡RELIQUIA!", color: C.oro });
+          bip(200, 0.5, "triangle", 0.07);
+        } else {
+          terminarPartida();
+        }
+      }
+    }
+  }
+
+  /* Proyectiles */
+  for (let i = proyectiles.length - 1; i >= 0; i--) {
+    const p = proyectiles[i];
+    p.vida -= dt;
+    if (p.orbita) {
+      p.orbita.r = Math.min(p.orbita.rMax, p.orbita.r + dt * 26);
+      p.orbita.a += dt * p.orbita.vel;
+      p.x = J.x + Math.cos(p.orbita.a) * p.orbita.r;
+      p.y = J.y + Math.sin(p.orbita.a) * p.orbita.r;
+    } else {
+      p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+    if (p.vida <= 0) { proyectiles.splice(i, 1); continue; }
+    for (const e of enemigosCerca(p.x, p.y, 1.9)) {
+      if (p.golpeados.has(e)) continue;
+      p.golpeados.add(e);
+      danarEnemigo(e, p.dmg, 0.1);
+      if (--p.pierce <= 0) { proyectiles.splice(i, 1); break; }
+    }
+  }
+
+  /* Gemas de experiencia */
+  const radio = 11 * J.iman;
+  for (let i = gemas.length - 1; i >= 0; i--) {
+    const g = gemas[i];
+    g.t += dt;
+    const dx = J.x - g.x, dy = J.y - g.y, d = Math.hypot(dx, dy) || 1;
+    if (g.t > 7) g.atraida = true;               // las gemas viejas te buscan solas
+    if (d < radio || g.atraida) {
+      g.atraida = true;
+      // Ojo: sin el maximo, una gema lejana obtenia velocidad negativa y huia del jugador.
+      const v = Math.max(24, 30 + (radio - d) * 4);
+      g.x += (dx / d) * v * dt; g.y += (dy / d) * v * dt;
+    } else {
+      g.x += g.vx * dt; g.y += g.vy * dt;
+      g.vx *= 0.9; g.vy *= 0.9;
+    }
+    if (d < 1.4) {
+      gemas.splice(i, 1);
+      J.xp += g.xp;
+      bip(1100, 0.03, "sine", 0.02);
+      while (J.xp >= J.xpProx) subirNivel();     // varias gemas de golpe = varios niveles
+    }
+  }
+
+  /* Curaciones */
+  for (let i = curas.length - 1; i >= 0; i--) {
+    const c = curas[i];
+    c.t += dt;
+    if (c.t > 25) { curas.splice(i, 1); continue; }
+    const cdx = J.x - c.x, cdy = J.y - c.y, cd = Math.hypot(cdx, cdy) || 1;
+    if (cd < 8 * J.iman) { c.x += (cdx / cd) * 22 * dt; c.y += (cdy / cd) * 22 * dt; }
+    if (cd < 2.2) {
+      curas.splice(i, 1);
+      J.vida = Math.min(J.vidaMax, J.vida + 30);
+      flotantes.push({ x: J.x, y: J.y - 2, t: 0.9, vida: 0.9, txt: "+30", color: C.verde });
+      bip(920, 0.12, "sine", 0.05);
+    }
+  }
+
+  /* Monedas */
+  for (let i = monedas.length - 1; i >= 0; i--) {
+    const m = monedas[i];
+    m.t += dt;
+    if (m.t > 25) { monedas.splice(i, 1); continue; }
+    const mdx = J.x - m.x, mdy = J.y - m.y, md = Math.hypot(mdx, mdy) || 1;
+    if (md < 11 * J.iman) { m.x += (mdx / md) * 26 * dt; m.y += (mdy / md) * 26 * dt; }
+    if (md < 1.6) {
+      monedas.splice(i, 1);
+      oroRun += m.oro;
+      bip(1400, 0.04, "square", 0.02);
+    }
+  }
+
+  /* Efectos y numeros flotantes */
+  for (let i = efectos.length - 1; i >= 0; i--) { const f = efectos[i]; f.t -= dt; if (f.t <= 0) efectos.splice(i, 1); }
+  for (let i = flotantes.length - 1; i >= 0; i--) { const f = flotantes[i]; f.t -= dt; f.y -= dt * 5; if (f.t <= 0) flotantes.splice(i, 1); }
+
+  directorSpawn(dt);
+
+  abrirMenuPendiente();
+}
+
+/* ---------- Dibujo -------------------------------------------------------- */
+/* Todo el mundo comparte la misma fase: celda entera + un desplazamiento en
+   pixeles comun. Antes el fondo saltaba media celda antes que las entidades y
+   el scroll se veia a trompicones. */
+let baseCol = 0, baseFila = 0, desplX = 0, desplY = 0;
+
+function situarCamara() {
+  // Se interpola la posicion del jugador con el resto del acumulador: con paso
+  // fijo a 60 Hz unos fotogramas ejecutan dos pasos y otros ninguno, y sin esto
+  // el scroll continuo delata ese vaiven.
+  const px = J.xPrev + (J.x - J.xPrev) * alfa;
+  const py = J.yPrev + (J.y - J.yPrev) * alfa;
+  cam.x = px - COLS / 2;
+  cam.y = py - (FILAS * ASPECTO) / 2;
+  const camF = cam.y / ASPECTO;
+  baseCol = Math.floor(cam.x);
+  baseFila = Math.floor(camF);
+  desplX = (cam.x - baseCol) * celdaW;
+  desplY = (camF - baseFila) * celdaH;
+}
+function aCol(x) { return Math.floor(x) - baseCol + 1; }
+function aFila(y) { return Math.floor(y / ASPECTO) - baseFila + 1; }
+
+function dibujarFondo() {
+  for (let f = 0; f < FILASM; f++) {
+    for (let c = 0; c < COLSM; c++) {
+      const h = hash2(baseCol - 1 + c, baseFila - 1 + f);
+      if (h > 0.955)      pon(c, f, "\u2663", C.fondo2, -1);
+      else if (h > 0.90)  pon(c, f, "\"",     C.fondo2, -1);
+      else if (h > 0.84)  pon(c, f, ".",      C.fondo2, -1);
+      else if (h > 0.822) pon(c, f, "\u00b7", C.muro,   -1);
+    }
+  }
+}
+
+function dibujarMundo() {
+  situarCamara();
+  dibujarFondo();
+
+  // Aura de ajo
+  if (J.auraT > 0 && J.auraR > 0) {
+    const pasos = Math.max(16, Math.floor(J.auraR * 2));
+    for (let i = 0; i < pasos; i++) {
+      const a = (i / pasos) * Math.PI * 2;
+      pon(aCol(J.x + Math.cos(a) * J.auraR), aFila(J.y + Math.sin(a) * J.auraR), "o", C.verde2, 1);
+    }
+  }
+
+  // Gemas
+  for (const g of gemas) {
+    const ch = g.xp >= 20 ? "\u2666" : g.xp >= 5 ? "\u25c6" : "*";
+    const col = g.xp >= 20 ? C.oro : g.xp >= 5 ? C.rosa : C.azul;
+    pon(aCol(g.x), aFila(g.y), ch, col, 2);
+  }
+
+  // Curaciones (parpadean cuando estan a punto de desaparecer)
+  for (const c of curas)
+    if (c.t < 20 || Math.floor(c.t * 6) % 2)
+      pon(aCol(c.x), aFila(c.y), "♥", C.rojo, 4);
+
+  // Efectos
+  for (const f of efectos) pon(aCol(f.x), aFila(f.y), f.ch, f.color, 5);
+
+  // Enemigos (con conteo de apilamiento)
+  const pila = new Map();
+  for (const e of enemigos) {
+    const c = aCol(e.x), f = aFila(e.y);
+    if (c < 0 || f < 0 || c >= COLSM || f >= FILASM) continue;
+    const k = f * COLSM + c;
+    pila.set(k, (pila.get(k) || 0) + 1);
+    const color = e.flash > 0 ? C.blanco : e.color;
+    pon(c, f, e.ch, color, e.jefe ? 8 : 6);
+  }
+  for (const [k, n] of pila) {
+    if (n < 3) continue;
+    const c = k % COLSM, f = (k / COLSM) | 0;
+    if (zM[k] <= 6) pon(c, f, n > 9 ? "\u2593" : "\u2592", C.sangre, 7);
+  }
+
+  // Proyectiles
+  for (const p of proyectiles) pon(aCol(p.x), aFila(p.y), p.ch, p.color, 9);
+
+  // Cruces orbitales
+  if (J.orb) {
+    for (let i = 0; i < J.orb.cant; i++) {
+      const a = J.orbA + (i / J.orb.cant) * Math.PI * 2;
+      pon(aCol(J.x + Math.cos(a) * J.orb.r), aFila(J.y + Math.sin(a) * J.orb.r), "+", C.azul, 9);
+    }
+  }
+
+  // Jugador: siempre por encima de todo lo demas del mundo
+  const parpadeo = J.invul > 0 && Math.floor(J.invul * 20) % 2 === 0;
+  pon(aCol(J.x), aFila(J.y), J.glifo, parpadeo ? C.rojo : C.blanco, 50);
+
+  // Numeros flotantes
+  for (const f of flotantes) texto(aCol(f.x) - Math.floor(f.txt.length / 2), aFila(f.y), f.txt, f.color, 40);
+
+  // Indicadores de jefe fuera de pantalla (pegados al borde visible)
+  for (const e of enemigos) {
+    if (!e.jefe) continue;
+    const c = aCol(e.x), f = aFila(e.y);
+    if (c >= 1 && f >= 1 && c <= COLS && f <= FILAS - 3) continue;
+    pon(clamp(c, 1, COLS), clamp(f, 1, FILAS - 3), "\u00a1", C.rojo, 45);
+  }
+}
+
+function barra(c, f, ancho, frac, chLleno, colLleno, colVacio) {
+  const n = Math.round(clamp(frac, 0, 1) * ancho);
+  for (let i = 0; i < ancho; i++) pon(c + i, f, i < n ? chLleno : "\u00b7", i < n ? colLleno : colVacio, 60);
+}
+
+function dibujarHUD() {
+  const f0 = FILAS - 3;
+  // La banda del HUD es opaca: si no, el mundo se ve entre los caracteres.
+  for (let f = f0 - 1; f < FILAS; f++) for (let c = 0; c < COLS; c++) fondoUI(c, f, C.fondo);
+  for (let c = 0; c < COLS; c++) pon(c, f0 - 1, "\u2500", C.muro, 58);
+
+  const min = Math.floor(tiempo / 60), seg = Math.floor(tiempo % 60);
+  const reloj = (min < 10 ? "0" : "") + min + ":" + (seg < 10 ? "0" : "") + seg;
+
+  texto(1, f0, "VIDA", C.gris);
+  barra(6, f0, 22, J.vida / J.vidaMax, "\u2588", J.vida / J.vidaMax > 0.3 ? C.rojo : C.sangre, C.fondo2);
+  texto(29, f0, Math.max(0, Math.ceil(J.vida)) + "/" + J.vidaMax, C.claro);
+
+  texto(1, f0 + 1, "EXP ", C.gris);
+  barra(6, f0 + 1, 22, J.xp / J.xpProx, "\u2588", C.azul, C.fondo2);
+  texto(29, f0 + 1, "Nv." + J.nivel, C.oro);
+
+  texto(38, f0, "\u23f1 " + reloj, C.claro);
+  texto(38, f0 + 1, "\u2620 " + matados, C.sangre);
+  texto(46, f0, "$ " + oroRun, C.oro);
+
+  // Inventario de armas y pasivas
+  let c = 52;
+  texto(c, f0, "ARMAS:", C.gris); c += 7;
+  for (const id in J.armas) { texto(c, f0, ARMAS[id].glifo + String(J.armas[id]), ARMAS[id].color); c += 3; }
+  let c2 = 52;
+  texto(c2, f0 + 1, "OBJET:", C.gris); c2 += 7;
+  for (const id in J.pasivas) { texto(c2, f0 + 1, PASIVAS[id].glifo[0] + String(J.pasivas[id]), PASIVAS[id].color); c2 += 3; }
+
+  const ayuda = "WASD/flechas  P pausa  M " + (silencio ? "sonido" : "silencio");
+  if (COLS > 96) texto(COLS - ayuda.length - 1, f0 + 1, ayuda, C.fondo2);
+
+  // Barra de vida del jefe mas cercano
+  let jefe = null;
+  for (const e of enemigos) if (e.jefe && (!jefe || e.vida > jefe.vida)) jefe = e;
+  if (jefe) {
+    const ancho = Math.min(48, COLS - 20);
+    const c3 = Math.floor((COLS - ancho) / 2);
+    texto(c3 - 8, 1, "Ω JEFE", C.rojo);
+    barra(c3, 1, ancho, jefe.vida / jefe.vidaMax, "█", C.sangre, C.fondo2);
+  }
+}
+
+function dibujarMenuNivel() {
+  const w = Math.min(64, COLS - 4), h = 16, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor((FILAS - h) / 2) - 1;
+  caja(c0, f0, w, h, C.oro, true);
+  textoCentrado(f0 + 1, "-=  \u00a1NIVEL " + J.nivel + "!  =-", C.oro);
+  textoCentrado(f0 + 2, "elige una mejora  (1 / 2 / 3)", C.gris);
+  for (let i = 0; i < opciones.length; i++) {
+    const o = opciones[i], f = f0 + 4 + i * 3, sel = i === seleccion;
+    if (sel) for (let x = 1; x < w - 1; x++) pon(c0 + x, f, " ", C.fondo2, 57);
+    texto(c0 + 3, f, (sel ? "\u25b6 " : "  ") + (i + 1) + ". " + o.glifo + " " + o.nombre +
+          (o.nivel > 1 ? "  Nv." + o.nivel : "  \u00a1NUEVO!"), sel ? C.blanco : o.color, 60);
+    texto(c0 + 8, f + 1, o.desc, C.gris, 60);
+  }
+  textoCentrado(f0 + h - 2, "\u2191\u2193 mover  \u00b7  Enter aceptar", C.muro);
+}
+
+/* Fuente de bloques 5x5 para el rotulo del titulo */
+const FUENTE_BLOQUE = {
+  V:["#   #","#   #","#   #"," # # ","  #  "],
+  A:[" ### ","#   #","#####","#   #","#   #"],
+  M:["#   #","## ##","# # #","#   #","#   #"],
+  P:["#### ","#   #","#### ","#    ","#    "],
+  I:["#####","  #  ","  #  ","  #  ","#####"],
+  R:["#### ","#   #","#### ","#  # ","#   #"],
+  E:["#####","#    ","#### ","#    ","#####"],
+  S:[" ####","#    "," ### ","    #","#### "],
+  C:[" ####","#    ","#    ","#    "," ####"],
+  " ":["     ","     ","     ","     ","     "]
+};
+function rotulo(f0, palabra, color) {
+  const letras = palabra.split("").map(ch => FUENTE_BLOQUE[ch] || FUENTE_BLOQUE[" "]);
+  const ancho = letras.length * 6 - 1;
+  const c0 = Math.floor((COLS - ancho) / 2);
+  for (let fila = 0; fila < 5; fila++) {
+    for (let i = 0; i < letras.length; i++) {
+      const patron = letras[i][fila];
+      for (let x = 0; x < patron.length; x++)
+        if (patron[x] === "#") pon(c0 + i * 6 + x, f0 + fila, "█", color, 60);
+    }
+  }
+  return ancho;
+}
+
+const MENU_TITULO = ["JUGAR", "TIENDA", "PERSONAJES"];
+
+function relojCorto(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return m + "m " + (s < 10 ? "0" : "") + s + "s";
+}
+function recorta(s, n) { return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s; }
+function bolsa(n, max, color) {          // ●●●○○ para los niveles comprados
+  let s = "";
+  for (let i = 0; i < max; i++) s += i < n ? "●" : "○";
+  return s;
+}
+
+function dibujarTitulo() {
+  // En pantallas bajas se recorta la paja para que el menu no se salga por abajo.
+  const compacto = FILAS < 28;
+  const f0 = Math.max(0, Math.floor((FILAS - (compacto ? 18 : 21)) / 2));
+  rotulo(f0, "VAMPIRE", C.sangre);
+  rotulo(f0 + 6, "ASSCII", C.rojo);
+
+  let f = f0 + 12;
+  textoCentrado(f++, "sobrevive a la horda escrita en caracteres", C.gris);
+  if (!compacto) textoCentrado(f++, "z v S w O Ω la horda  ·  * gemas  ·  $ oro  ·  ♥ vida", C.muro);
+  f++;
+
+  const P = personajePorId(guardado.elegido);
+  const c0 = Math.max(0, Math.floor(COLS / 2) - 16);
+  ultimaBaseMenu = f;
+  for (let i = 0; i < MENU_TITULO.length; i++) {
+    const sel = i === menuSel;
+    const extra = i === 0 ? "   con " + P.glifo + " " + P.nombre
+                : i === 1 ? "   $ " + guardado.oro
+                : "   " + guardado.personajes.length + "/" + PERSONAJES.length;
+    texto(c0, f + i, (sel ? "▶ " : "  ") + (i + 1) + ". " + MENU_TITULO[i], sel ? C.blanco : C.claro);
+    texto(c0 + 16, f + i, extra, sel ? C.oro : C.muro);
+  }
+  f += MENU_TITULO.length + 1;
+
+  if (guardado.record > 0)
+    textoCentrado(f, "record: " + relojCorto(guardado.record) + "  ·  nivel " + guardado.mejorNivel, C.oro);
+  textoCentrado(f + 1, "↑↓ elegir  ·  ENTER aceptar  ·  las armas disparan solas", C.muro);
+}
+
+/* Lista con cursor, comun a tienda y personajes. */
+function dibujarLista(f0, c0, ancho, filas, dibujarFila) {
+  for (let i = 0; i < filas.length; i++) {
+    const sel = i === menuSel, f = f0 + i * 2;
+    if (sel) for (let x = 0; x < ancho; x++) fondoUI(c0 + x, f, C.fondo2);
+    texto(c0, f, sel ? "▶" : " ", C.oro);
+    dibujarFila(filas[i], f, sel);
+  }
+}
+
+function dibujarTienda() {
+  const w = Math.min(72, COLS - 4), h = Math.min(FILAS - 2, 8 + Object.keys(TIENDA).length * 2);
+  const c0 = Math.floor((COLS - w) / 2), f0 = Math.max(0, Math.floor((FILAS - h) / 2));
+  caja(c0, f0, w, h, C.oro, true);
+  texto(c0 + 3, f0 + 1, "T I E N D A", C.oro);
+  const bolsaTxt = "$ " + guardado.oro;
+  texto(c0 + w - bolsaTxt.length - 3, f0 + 1, bolsaTxt, C.oro);
+  texto(c0 + 3, f0 + 2, "mejoras permanentes: valen para todas las partidas", C.gris);
+
+  const ids = Object.keys(TIENDA);
+  ultimaBaseMenu = f0 + 4;
+  dibujarLista(f0 + 4, c0 + 2, w - 4, ids, (id, f, sel) => {
+    const t = TIENDA[id], n = guardado.mejoras[id] || 0, tope = n >= t.max;
+    const coste = costeMejora(id);
+    const puede = !tope && guardado.oro >= coste;
+    texto(c0 + 4, f, t.glifo + " " + t.nombre, sel ? C.blanco : (tope ? C.verde : C.claro));
+    texto(c0 + 18, f, recorta(t.desc, w - 38), C.gris);
+    texto(c0 + w - 18, f, bolsa(n, t.max), tope ? C.verde : C.azul);
+    texto(c0 + w - 9, f, tope ? "  MAX" : String(coste).padStart(5),
+          tope ? C.verde : (puede ? C.oro : C.muro));
+  });
+
+  const pie = f0 + h - 2;
+  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : "ENTER comprar  ·  ESC volver  ·  el oro se gana matando",
+        avisoT > 0 ? avisoColor : C.muro);
+}
+
+function dibujarPersonajes() {
+  const w = Math.min(74, COLS - 4), h = Math.min(FILAS - 2, 8 + PERSONAJES.length * 2);
+  const c0 = Math.floor((COLS - w) / 2), f0 = Math.max(0, Math.floor((FILAS - h) / 2));
+  caja(c0, f0, w, h, C.morado, true);
+  texto(c0 + 3, f0 + 1, "P E R S O N A J E S", C.morado);
+  const bolsaTxt = "$ " + guardado.oro;
+  texto(c0 + w - bolsaTxt.length - 3, f0 + 1, bolsaTxt, C.oro);
+  texto(c0 + 3, f0 + 2, "cada uno empieza con un arma distinta", C.gris);
+
+  ultimaBaseMenu = f0 + 4;
+  dibujarLista(f0 + 4, c0 + 2, w - 4, PERSONAJES, (P, f, sel) => {
+    const tiene = guardado.personajes.includes(P.id);
+    const activo = guardado.elegido === P.id;
+    texto(c0 + 4, f, P.glifo + " " + P.nombre, activo ? C.oro : (tiene ? (sel ? C.blanco : C.claro) : C.muro));
+    texto(c0 + 18, f, recorta(tiene ? P.desc : "bloqueado", w - 50), tiene ? C.gris : C.muro);
+    const arma = recorta(ARMAS[P.arma].glifo + " " + ARMAS[P.arma].nombre, 19);
+    texto(c0 + w - 30, f, arma, tiene ? ARMAS[P.arma].color : C.muro);
+    texto(c0 + w - 9, f, activo ? " ACTIVO" : tiene ? "" : String(P.coste).padStart(5),
+          activo ? C.oro : (guardado.oro >= P.coste ? C.oro : C.muro));
+  });
+
+  const pie = f0 + h - 2;
+  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : "ENTER elegir o comprar  ·  ESC volver",
+        avisoT > 0 ? avisoColor : C.muro);
+}
+
+function avisar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.rojo; bip(140, 0.12, "square", 0.04); }
+function anunciar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.verde; }
+
+function dibujarFin() {
+  const w = Math.min(52, COLS - 4), h = 12, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor((FILAS - h) / 2);
+  caja(c0, f0, w, h, C.sangre, true);
+  textoCentrado(f0 + 2, "H A S   M U E R T O", C.rojo);
+  textoCentrado(f0 + 4, "tiempo sobrevivido: " + relojCorto(tiempo) +
+                (tiempo >= guardado.record ? "  ¡RECORD!" : ""), C.claro);
+  textoCentrado(f0 + 5, "enemigos eliminados: " + matados + "   ·   nivel " + J.nivel, C.claro);
+  textoCentrado(f0 + 7, "monedas: $ " + oroRun + "   ·   botin: $ " + botinRun +
+                "   ·   bolsa: $ " + guardado.oro, C.oro);
+  textoCentrado(f0 + 9, "[ ESPACIO reintentar ]   [ T tienda ]   [ ESC menu ]", C.claro);
+}
+
+function dibujarPausa() {
+  const w = 30, h = 5, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor(FILAS / 2) - 2;
+  caja(c0, f0, w, h, C.azul, true);
+  textoCentrado(f0 + 2, "P A U S A", C.claro);
+}
+
+/* ---------- Bucle principal (paso fijo) ----------------------------------- */
+let ultimo = performance.now(), acumulado = 0, alfa = 0;
+const MENUS = { titulo: dibujarTitulo, tienda: dibujarTienda, personajes: dibujarPersonajes };
+
+function cuadro(ahora) {
+  requestAnimationFrame(cuadro);
+  const dt = Math.min(0.25, (ahora - ultimo) / 1000);
+  ultimo = ahora;
+  if (avisoT > 0) avisoT -= dt;
+
+  if (estado === "juego") {
+    acumulado += dt;
+    let pasos = 0;
+    while (acumulado >= PASO && pasos < 6) { actualizar(PASO); acumulado -= PASO; pasos++; if (estado !== "juego") break; }
+    if (acumulado > 0.5) acumulado = 0;
+    alfa = acumulado / PASO;
+  } else {
+    acumulado = 0;                 // al salir de un menu no se ejecutan pasos atrasados de golpe
+  }
+
+  limpiar();
+  if (MENUS[estado]) {
+    capa = 1;
+    MENUS[estado]();
+  } else {
+    dibujarMundo();
+    capa = 1;
+    dibujarHUD();
+    if (estado === "nivel") dibujarMenuNivel();
+    if (estado === "pausa") dibujarPausa();
+    if (estado === "fin")   dibujarFin();
+  }
+  pintar();
+}
+
+/* ---------- Compras -------------------------------------------------------- */
+function comprarMejora(id) {
+  const t = TIENDA[id], n = guardado.mejoras[id] || 0;
+  if (n >= t.max) { avisar(t.nombre + " ya esta al maximo."); return; }
+  const coste = costeMejora(id);
+  if (guardado.oro < coste) { avisar("Te faltan " + (coste - guardado.oro) + " de oro."); return; }
+  guardado.oro -= coste;
+  guardado.mejoras[id] = n + 1;
+  guardarProgreso();
+  anunciar(t.nombre + " sube a " + (n + 1) + ".");
+  bip(880, 0.1, "triangle", 0.05);
+}
+
+function elegirPersonaje(P) {
+  if (guardado.personajes.includes(P.id)) {
+    guardado.elegido = P.id; guardarProgreso();
+    anunciar(P.nombre + " listo para la caza.");
+    bip(700, 0.09, "triangle", 0.05);
+    return;
+  }
+  if (guardado.oro < P.coste) { avisar("Te faltan " + (P.coste - guardado.oro) + " de oro."); return; }
+  guardado.oro -= P.coste;
+  guardado.personajes.push(P.id);
+  guardado.elegido = P.id;
+  guardarProgreso();
+  anunciar("¡" + P.nombre + " desbloqueado!");
+  bip(920, 0.14, "triangle", 0.06);
+}
+
+function abrirDelTitulo() {
+  if (menuSel === 0) { empezarPartida(); return; }
+  estado = menuSel === 1 ? "tienda" : "personajes";
+  menuSel = 0; avisoT = 0;
+  bip(520, 0.06, "triangle", 0.04);
+}
+
+function empezarPartida() {
+  reiniciar();
+  estado = "juego"; tiempo = 0; menuSel = 0; avisoT = 0;
+  bip(660, 0.08, "triangle", 0.05);
+}
+
+/* ---------- Manejo de teclas por estado ----------------------------------- */
+function manejarTecla(k) {
+  if (k === "m") { silencio = !silencio; return; }
+  const arriba  = k === "arrowup"   || k === "w";
+  const abajo   = k === "arrowdown" || k === "s";
+  const aceptar = k === "enter" || k === " " || k === "spacebar";
+
+  if (estado === "titulo") {
+    if (arriba)  menuSel = (menuSel + MENU_TITULO.length - 1) % MENU_TITULO.length;
+    else if (abajo) menuSel = (menuSel + 1) % MENU_TITULO.length;
+    else if (k === "1" || k === "2" || k === "3") { menuSel = +k - 1; abrirDelTitulo(); }
+    else if (aceptar) abrirDelTitulo();
+    return;
+  }
+  if (estado === "tienda") {
+    const ids = Object.keys(TIENDA);
+    if (arriba)  menuSel = (menuSel + ids.length - 1) % ids.length;
+    else if (abajo) menuSel = (menuSel + 1) % ids.length;
+    else if (aceptar) comprarMejora(ids[menuSel]);
+    else if (k === "escape" || k === "t") { estado = "titulo"; menuSel = 1; avisoT = 0; }
+    return;
+  }
+  if (estado === "personajes") {
+    if (arriba)  menuSel = (menuSel + PERSONAJES.length - 1) % PERSONAJES.length;
+    else if (abajo) menuSel = (menuSel + 1) % PERSONAJES.length;
+    else if (aceptar) elegirPersonaje(PERSONAJES[menuSel]);
+    else if (k === "escape" || k === "c") { estado = "titulo"; menuSel = 2; avisoT = 0; }
+    return;
+  }
+  if (estado === "fin") {
+    if (aceptar) empezarPartida();
+    else if (k === "t") { estado = "tienda"; menuSel = 0; }
+    else if (k === "escape") { estado = "titulo"; menuSel = 0; }
+    return;
+  }
+  if (estado === "nivel") {
+    if (k === "1") aplicarOpcion(opciones[0]);
+    else if (k === "2" && opciones[1]) aplicarOpcion(opciones[1]);
+    else if (k === "3" && opciones[2]) aplicarOpcion(opciones[2]);
+    else if (k === "arrowup" || k === "w") seleccion = (seleccion + opciones.length - 1) % opciones.length;
+    else if (k === "arrowdown" || k === "s") seleccion = (seleccion + 1) % opciones.length;
+    else if (k === "enter" || k === " " || k === "spacebar") aplicarOpcion(opciones[seleccion]);
+    return;
+  }
+  if (k === "p" || k === "escape") estado = estado === "pausa" ? "juego" : "pausa";
+}
+
+/* Raton y tactil: menus con toque directo, y arrastrar para moverse */
+let puntero = null;
+cv.addEventListener("pointerdown", ev => {
+  cv.focus();
+  const r = cv.getBoundingClientRect();
+  const f = Math.floor((ev.clientY - r.top) / celdaH);
+
+  // En los menus de lista, tocar una fila la selecciona; volver a tocarla, la activa.
+  if (estado === "titulo" || estado === "tienda" || estado === "personajes") {
+    const filas = estado === "titulo" ? MENU_TITULO.length
+                : estado === "tienda" ? Object.keys(TIENDA).length : PERSONAJES.length;
+    const base = ultimaBaseMenu, paso = estado === "titulo" ? 1 : 2;
+    const i = Math.floor((f - base) / paso);
+    if (i >= 0 && i < filas && (f - base) % paso === 0) {
+      if (menuSel === i) manejarTecla("enter"); else menuSel = i;
+    }
+    return;
+  }
+  if (estado === "fin") { manejarTecla(" "); return; }
+  if (estado === "nivel") {
+    const h = 16, f0 = Math.floor((FILAS - h) / 2) - 1;
+    for (let i = 0; i < opciones.length; i++) {
+      const fo = f0 + 4 + i * 3;
+      if (f === fo || f === fo + 1) { aplicarOpcion(opciones[i]); return; }
+    }
+    return;
+  }
+  if (estado === "juego") {
+    puntero = { x: ev.clientX, y: ev.clientY };
+    try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* sin captura tambien se juega */ }
+  }
+});
+cv.addEventListener("pointermove", ev => { if (puntero) puntero = { x: ev.clientX, y: ev.clientY }; });
+addEventListener("pointerup", () => { puntero = null; });
+addEventListener("pointercancel", () => { puntero = null; });
+cv.addEventListener("contextmenu", ev => ev.preventDefault());
+
+/* ---------- Arranque ------------------------------------------------------ */
+cargarProgreso();
+redimensionar();
+reiniciar();
+cv.focus();
+requestAnimationFrame(cuadro);
+</script>
+</body>
+</html>

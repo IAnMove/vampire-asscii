@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "id": "vampire-asscii",
+  "slug": "vampire-asscii",
+  "name": "VAMPIRE ASSCII",
+  "shortDescription": "Sobrevive a una horda de vampiros dibujada con caracteres.",
+  "description": "Un roguelite de supervivencia en modo texto: muévete, recoge experiencia, elige mejoras y aguanta todo lo que puedas.",
+  "type": "game",
+  "genre": "survival roguelite",
+  "tags": ["ascii", "arcade", "roguelite", "supervivencia"],
+  "version": "1.0.0",
+  "status": "published",
+  "featured": true,
+  "path": "/vampire-asscii/",
+  "entry": "index.html",
+  "accent": "#e03a4a",
+  "screenshots": [
+    {"src": "./screenshots/gameplay.png", "alt": "Partida avanzada contra un jefe y una horda de vampiros"},
+    {"src": "./screenshots/menu.png", "alt": "Pantalla de título de Vampire Asscii"}
+  ],
+  "art": [
+    " z       v       S       w ",
+    "    o o o o o o o o o o    ",
+    "  o                     o  ",
+    " o    *    ♥ @ ♥    *    o ",
+    "  o                     o  ",
+    "    o o o o o o o o o o    ",
+    " Ω       $       O       v "
+  ],
+  "controls": [
+    {"key": "WASD / flechas", "action": "Moverse"},
+    {"key": "1 · 2 · 3", "action": "Elegir mejora"},
+    {"key": "P / Esc", "action": "Pausa"},
+    {"key": "M", "action": "Silenciar"}
+  ],
+  "features": [
+    "6 armas y 8 mejoras permanentes",
+    "6 tipos de enemigo y jefes cada minuto",
+    "Tienda, personajes desbloqueables y guardado local"
+  ]
+}
