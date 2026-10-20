@@ -99,3 +99,7 @@ salían despedidas del jugador en vez de acercarse (velocidad negativa al pasar 
 el búfer de profundidad se inicializaba a 0, así que el fondo, dibujado en `z = -1`, no llegaba a
 pintarse nunca; y la cámara interpolada leía una posición previa inexistente en el primer
 fotograma de cada partida.
+
+## Licencia
+
+Publicado bajo la [licencia MIT](LICENSE). © 2026 Ignacio del Cano (IAnMove).
