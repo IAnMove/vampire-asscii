@@ -102,4 +102,4 @@ fotograma de cada partida.
 
 ## Licencia
 
-Publicado bajo la [licencia MIT](LICENSE). © 2026 Ignacio del Cano (IAnMove).
+Publicado bajo la [licencia MIT](LICENSE). © 2026 IAnMove.
