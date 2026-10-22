@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>VAMPIRE ASSCII</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"VAMPIRE%20ASSCII","short_name":"VampireAsscii","display":"standalone","background_color":"%230c0f16","theme_color":"%230c0f16"}'>
+<meta name="theme-color" content="#0c0f16">
 <style>
   /* Un unico mundo visual a proposito: terminal de fosforo en un sotano. */
   :root { color-scheme: dark; --tinta:#0c0f16; --sangre:#8b1c2b; }
@@ -31,19 +33,220 @@
    Todo el juego (mundo, HUD y menus) se dibuja como rejilla de caracteres.
    ========================================================================== */
 
+/* ---------- Internacionalizacion (i18n) ----------------------------------- */
+const I18N = {
+  es: {
+    menu_play: "JUGAR",
+    menu_shop: "TIENDA",
+    menu_chars: "PERSONAJES",
+    subtitle: "sobrevive a la horda escrita en caracteres",
+    legend: "z v S w O Ω la horda  ·  * gemas  ·  $ oro  ·  ♥ vida",
+    with: "con",
+    record: "record:",
+    level: "nivel",
+    title_help: "↑↓ elegir  ·  ENTER aceptar  ·  las armas disparan solas",
+    shop_title: "T I E N D A",
+    shop_subtitle: "mejoras permanentes: valen para todas las partidas",
+    shop_help: "ENTER comprar  ·  ESC volver  ·  el oro se gana matando",
+    chars_title: "P E R S O N A J E S",
+    chars_subtitle: "cada uno empieza con un arma distinta",
+    chars_help: "ENTER elegir o comprar  ·  ESC volver",
+    chars_locked: "bloqueado",
+    chars_active: "ACTIVO",
+    pause_title: "P A U S A",
+    died_title: "H A S   M U E R T O",
+    time_survived: "tiempo sobrevivido: ",
+    record_badge: "  ¡RECORD!",
+    enemies_slain: "enemigos eliminados: ",
+    coins: "monedas: ",
+    bounty: "botin: ",
+    pouch: "bolsa: ",
+    end_help: "[ ESPACIO reintentar ]   [ T tienda ]   [ ESC menu ]",
+    lvlup_title: "-=  ¡NIVEL %d!  =-",
+    lvlup_choose: "elige una mejora  (1 / 2 / 3)",
+    lvlup_new: "¡NUEVO!",
+    lvlup_help: "↑↓ mover  ·  Enter aceptar",
+    wave_alert: "¡OLEADA!",
+    boss_alert: "¡¡JEFE!!",
+    relic_alert: "¡RELIQUIA!",
+    feast_name: "Festin",
+    feast_desc: "Recupera 40 de vida",
+    upg_to_level: "Sube a nivel ",
+    hud_hp: "VIDA",
+    hud_xp: "EXP ",
+    hud_lv: "Nv.",
+    hud_weapons: "ARMAS:",
+    hud_items: "OBJET:",
+    hud_boss: "Ω JEFE",
+    hud_help: "WASD/flechas  P pausa  M sonido  N musica  L idioma",
+    shop_maxed: " ya esta al maximo.",
+    shop_need_gold: "Te faltan %d de oro.",
+    shop_upgraded: " sube a %d.",
+    char_ready: " listo para la caza.",
+    char_unlocked: "¡%s desbloqueado!",
+    lang_tag: "[ L: ES ]",
+    // Armas
+    w_daga_name: "Daga arrojadiza", w_daga_desc: "Lanza dagas al enemigo mas cercano.",
+    w_latigo_name: "Latigo", w_latigo_desc: "Golpea en abanico a los lados, alternando.",
+    w_ajo_name: "Aura de ajo", w_ajo_desc: "Dana sin parar a lo que te rodea y lo empuja.",
+    w_orbitas_name: "Cruces orbitales", w_orbitas_desc: "Cruces que giran a tu alrededor.",
+    w_rayo_name: "Rayo", w_rayo_desc: "Cae sobre enemigos al azar.",
+    w_biblia_name: "Biblia maldita", w_biblia_desc: "Libros que orbitan lejos y atraviesan todo.",
+    // Pasivas
+    p_botas_name: "Botas aladas", p_botas_desc: "+12% velocidad",
+    p_corazon_name: "Corazon", p_corazon_desc: "+20 vida max y cura",
+    p_furia_name: "Furia", p_furia_desc: "+15% dano",
+    p_reloj_name: "Reloj roto", p_reloj_desc: "-12% enfriamiento",
+    p_esfera_name: "Esfera", p_esfera_desc: "+20% area",
+    p_iman_name: "Iman", p_iman_desc: "+40% radio de recogida",
+    p_armadura_name: "Armadura", p_armadura_desc: "-1 dano recibido",
+    p_vendas_name: "Vendas", p_vendas_desc: "+0.4 vida/seg",
+    // Tienda
+    t_vigor_name: "Vigor", t_vigor_desc: "+12% vida maxima",
+    t_fuerza_name: "Fuerza", t_fuerza_desc: "+8% dano",
+    t_prisa_name: "Prisa", t_prisa_desc: "+5% velocidad",
+    t_pulso_name: "Pulso", t_pulso_desc: "-5% enfriamiento",
+    t_magnetita_name: "Magnetita", t_magnetita_desc: "+20% radio de recogida",
+    t_codicia_name: "Codicia", t_codicia_desc: "+25% oro que sueltan",
+    t_coraza_name: "Coraza", t_coraza_desc: "-1 dano recibido",
+    t_reliquia_name: "Reliquia", t_reliquia_desc: "revives una vez",
+    // Personajes
+    c_aldeano_name: "Aldeano", c_aldeano_desc: "Equilibrado. La escuela clasica.",
+    c_cazadora_name: "Cazadora", c_cazadora_desc: "Veloz y fragil. Golpea a los lados.",
+    c_monje_name: "Monje", c_monje_desc: "Lento, pero su aura es enorme.",
+    c_sepulturero_name: "Sepulturero", c_sepulturero_desc: "Duro como una lapida.",
+    c_alquimista_name: "Alquimista", c_alquimista_desc: "Pega como un tren, aguanta como un vaso.",
+    c_hereje_name: "Hereje", c_hereje_desc: "Cadencia infernal y buen iman."
+  },
+  en: {
+    menu_play: "PLAY",
+    menu_shop: "SHOP",
+    menu_chars: "CHARACTERS",
+    subtitle: "survive the character-rendered horde",
+    legend: "z v S w O Ω the horde  ·  * gems  ·  $ gold  ·  ♥ health",
+    with: "with",
+    record: "record:",
+    level: "level",
+    title_help: "↑↓ choose  ·  ENTER accept  ·  weapons auto-fire",
+    shop_title: "S H O P",
+    shop_subtitle: "permanent upgrades: persist across all runs",
+    shop_help: "ENTER buy  ·  ESC back  ·  gold is earned by slaying",
+    chars_title: "C H A R A C T E R S",
+    chars_subtitle: "each character starts with a unique weapon",
+    chars_help: "ENTER select or buy  ·  ESC back",
+    chars_locked: "locked",
+    chars_active: "ACTIVE",
+    pause_title: "P A U S E D",
+    died_title: "Y O U   D I E D",
+    time_survived: "survival time: ",
+    record_badge: "  NEW RECORD!",
+    enemies_slain: "enemies slain: ",
+    coins: "coins: ",
+    bounty: "bounty: ",
+    pouch: "pouch: ",
+    end_help: "[ SPACE retry ]   [ T shop ]   [ ESC menu ]",
+    lvlup_title: "-=  LEVEL %d!  =-",
+    lvlup_choose: "choose an upgrade  (1 / 2 / 3)",
+    lvlup_new: "NEW!",
+    lvlup_help: "↑↓ move  ·  Enter accept",
+    wave_alert: "WAVE!",
+    boss_alert: "BOSS!!",
+    relic_alert: "RELIC!",
+    feast_name: "Feast",
+    feast_desc: "Restores 40 health",
+    upg_to_level: "Upgrade to lvl ",
+    hud_hp: "HP  ",
+    hud_xp: "EXP ",
+    hud_lv: "Lv.",
+    hud_weapons: "WEAPONS:",
+    hud_items: "ITEMS:  ",
+    hud_boss: "Ω BOSS",
+    hud_help: "WASD/arrows  P pause  M sound  N music  L lang",
+    shop_maxed: " is already at max level.",
+    shop_need_gold: "You need %d more gold.",
+    shop_upgraded: " upgraded to %d.",
+    char_ready: " ready for the hunt.",
+    char_unlocked: "%s unlocked!",
+    lang_tag: "[ L: EN ]",
+    // Weapons
+    w_daga_name: "Throwing Dagger", w_daga_desc: "Throws daggers at the nearest enemy.",
+    w_latigo_name: "Whip", w_latigo_desc: "Whips enemies on alternating sides.",
+    w_ajo_name: "Garlic Aura", w_ajo_desc: "Damages and pushes surrounding enemies.",
+    w_orbitas_name: "Orbiting Crosses", w_orbitas_desc: "Crosses rotating around you.",
+    w_rayo_name: "Lightning Bolt", w_rayo_desc: "Strikes random enemies from above.",
+    w_biblia_name: "Cursed Bible", w_biblia_desc: "Books orbiting further that pierce everything.",
+    // Passives
+    p_botas_name: "Winged Boots", p_botas_desc: "+12% speed",
+    p_corazon_name: "Heart", p_corazon_desc: "+20 max HP and heal",
+    p_furia_name: "Fury", p_furia_desc: "+15% damage",
+    p_reloj_name: "Broken Clock", p_reloj_desc: "-12% cooldown",
+    p_esfera_name: "Sphere", p_esfera_desc: "+20% area",
+    p_iman_name: "Magnet", p_iman_desc: "+40% pickup radius",
+    p_armadura_name: "Armor", p_armadura_desc: "-1 damage taken",
+    p_vendas_name: "Bandages", p_vendas_desc: "+0.4 HP/sec",
+    // Shop
+    t_vigor_name: "Vigor", t_vigor_desc: "+12% max health",
+    t_fuerza_name: "Might", t_fuerza_desc: "+8% damage",
+    t_prisa_name: "Haste", t_prisa_desc: "+5% speed",
+    t_pulso_name: "Pulse", t_pulso_desc: "-5% cooldown",
+    t_magnetita_name: "Magnetite", t_magnetita_desc: "+20% pickup radius",
+    t_codicia_name: "Greed", t_codicia_desc: "+25% gold drops",
+    t_coraza_name: "Carapace", t_coraza_desc: "-1 damage taken",
+    t_reliquia_name: "Relic", t_reliquia_desc: "revive once",
+    // Characters
+    c_aldeano_name: "Villager", c_aldeano_desc: "Balanced. The classic style.",
+    c_cazadora_name: "Huntress", c_cazadora_desc: "Fast and fragile. Strikes the flanks.",
+    c_monje_name: "Monk", c_monje_desc: "Slow, but with a massive aura.",
+    c_sepulturero_name: "Gravedigger", c_sepulturero_desc: "Tough as a tombstone.",
+    c_alquimista_name: "Alchemist", c_alquimista_desc: "Hits like a train, fragile as glass.",
+    c_hereje_name: "Heretic", c_hereje_desc: "Infernal fire rate and great magnet."
+  }
+};
+
+function detectarIdiomaSO() {
+  const nav = (typeof navigator !== "undefined" && ((navigator.languages && navigator.languages[0]) || navigator.language)) || "es";
+  return nav.toLowerCase().startsWith("es") ? "es" : "en";
+}
+
+function idiomaActual() {
+  if (guardado && (guardado.idioma === "es" || guardado.idioma === "en")) return guardado.idioma;
+  return detectarIdiomaSO();
+}
+
+function T(k, ...args) {
+  const lang = idiomaActual();
+  let str = (I18N[lang] && I18N[lang][k]) || I18N.es[k] || k;
+  if (args.length) {
+    args.forEach(a => { str = str.replace(/%[ds]/, a); });
+  }
+  return str;
+}
+
+let MENU_TITULO = ["JUGAR", "TIENDA", "PERSONAJES"];
+function actualizarMenuTitulos() {
+  MENU_TITULO[0] = T("menu_play");
+  MENU_TITULO[1] = T("menu_shop");
+  MENU_TITULO[2] = T("menu_chars");
+}
+
+function alternarIdioma() {
+  const actual = idiomaActual();
+  guardado.idioma = actual === "es" ? "en" : "es";
+  guardarProgreso();
+  actualizarMenuTitulos();
+  SFX.uiOk();
+}
+
 /* ---------- Lienzo y rejilla de caracteres ------------------------------- */
 const cv  = document.getElementById("pantalla");
 const ctx = cv.getContext("2d", { alpha: false });
 const FUENTE = 'ui-monospace,SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace';
 
 let COLS = 0, FILAS = 0, celdaW = 0, celdaH = 0, ASPECTO = 2, dpr = 1, anchoCSS = 0, altoCSS = 0;
-/* Dos capas: el mundo se pinta desplazado a subcelda (scroll continuo) y la
-   interfaz va clavada a la rejilla. El mundo lleva una fila y columna de mas
-   para que el desplazamiento no deje un borde vacio. */
 let COLSM = 0, FILASM = 0;
 let bufM = null, colM = null, zM = null;
 let bufU = null, colU = null, zU = null, fondoU = null;
-let capa = 0;                                   // 0 = mundo, 1 = interfaz
+let capa = 0;
 
 function redimensionar() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -54,13 +257,12 @@ function redimensionar() {
   cv.style.width = W + "px";
   cv.style.height = H + "px";
 
-  // Tamano de fuente para acercarnos a ~110 columnas sin bajar de 9px.
   let tam = Math.max(9, Math.min(Math.floor(W / 110 / 0.6), Math.floor(H / 42)));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.font = tam + "px " + FUENTE;
-  celdaW = ctx.measureText("M").width;          // medido, nunca supuesto
+  celdaW = ctx.measureText("M").width;
   celdaH = Math.round(tam * 1.06);
-  ASPECTO = celdaH / celdaW;                    // celda alta: ~2 unidades de mundo
+  ASPECTO = celdaH / celdaW;
   COLS  = Math.max(20, Math.floor(W / celdaW));
   FILAS = Math.max(14, Math.floor(H / celdaH));
   COLSM = COLS + 2; FILASM = FILAS + 2;
@@ -76,7 +278,7 @@ function redimensionar() {
 }
 window.addEventListener("resize", redimensionar);
 
-/* Paleta: guardamos indices en el buffer y agrupamos por color al pintar. */
+/* Paleta */
 const PAL = ["#0c0f16","#1d2536","#33415c","#6b7a99","#c8d2e4","#ffffff",
              "#8b1c2b","#e03a4a","#ff8360","#ffd166","#7bd88f","#3fb98a",
              "#59c2ff","#a06bff","#ff6ec7","#5a3a2a"];
@@ -103,8 +305,7 @@ function pon(c, f, ch, color, z) {
     bufM[i] = ch; colM[i] = color; zM[i] = z | 0;
   }
 }
-/* Marca celdas de interfaz como opacas: si no, el mundo se cuela entre los
-   huecos de los caracteres del marco. */
+
 function fondoUI(c, f, color) {
   if (c < 0 || f < 0 || c >= COLS || f >= FILAS) return;
   fondoU[f * COLS + c] = color + 1;
@@ -125,7 +326,6 @@ function caja(c, f, w, h, color, relleno) {
   }
 }
 
-/* Pintado: recorre filas y agrupa tramos contiguos del mismo color. */
 function pintarCapa(buf, col, ancho, alto) {
   for (let f = 0; f < alto; f++) {
     const y = f * celdaH;
@@ -147,7 +347,6 @@ function pintar() {
   ctx.fillRect(0, 0, anchoCSS, altoCSS);
   ctx.textBaseline = "top";
 
-  // Mundo: desplazado a subcelda, mas la sacudida, tambien en pixeles.
   const sx = sacudida > 0.2 ? rnd(-1, 1) * sacudida * 0.55 : 0;
   const sy = sacudida > 0.2 ? rnd(-1, 1) * sacudida * 0.3  : 0;
   ctx.save();
@@ -155,7 +354,6 @@ function pintar() {
   pintarCapa(bufM, colM, COLSM, FILASM);
   ctx.restore();
 
-  // Interfaz: primero los fondos opacos, agrupados por tramos.
   for (let f = 0; f < FILAS; f++) {
     let inicio = -1, cf = -1;
     for (let c = 0; c <= COLS; c++) {
@@ -183,39 +381,359 @@ function hash2(x, y) {
 }
 function elegir(a) { return a[rndi(0, a.length - 1)]; }
 
-/* ---------- Sonido (bips sinteticos, sin ficheros externos) --------------- */
-let audio = null, silencio = false;
+/* ---------- Motor de Audio Chiptune y Musica Retro ----------------------- */
+let audioCtx = null, silencio = false, musicaActiva = true;
+let musicInterval = null, musicStep = 0, noiseBuffer = null;
+
+function obtenerAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+function getNoiseBuffer(ctx) {
+  if (!noiseBuffer) {
+    const len = Math.floor(ctx.sampleRate * 0.4);
+    noiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+const SFX = {
+  daga() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(750, now);
+      osc.frequency.exponentialRampToValueAtTime(320, now + 0.05);
+      g.gain.setValueAtTime(0.04, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.05);
+    } catch(e){}
+  },
+  latigo() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const noise = ctx.createBufferSource();
+      noise.buffer = getNoiseBuffer(ctx);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1600, now);
+      filter.frequency.exponentialRampToValueAtTime(250, now + 0.08);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.06, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      noise.connect(filter); filter.connect(g); g.connect(ctx.destination);
+      noise.start(now); noise.stop(now + 0.08);
+    } catch(e){}
+  },
+  ajo() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.linearRampToValueAtTime(260, now + 0.07);
+      g.gain.setValueAtTime(0.03, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.07);
+    } catch(e){}
+  },
+  rayo() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(950, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+      g.gain.setValueAtTime(0.06, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.15);
+    } catch(e){}
+  },
+  biblia() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(480, now);
+      osc.frequency.setValueAtTime(640, now + 0.03);
+      g.gain.setValueAtTime(0.035, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.09);
+    } catch(e){}
+  },
+  hitEnemigo() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(55, now + 0.04);
+      g.gain.setValueAtTime(0.02, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.04);
+    } catch(e){}
+  },
+  gema() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1050 + Math.random() * 200, now);
+      g.gain.setValueAtTime(0.02, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.035);
+    } catch(e){}
+  },
+  moneda() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(987, now);
+      osc.frequency.setValueAtTime(1318, now + 0.04);
+      g.gain.setValueAtTime(0.02, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.09);
+    } catch(e){}
+  },
+  cura() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      [440, 554, 659].forEach((f, i) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = "sine"; osc.frequency.value = f;
+        g.gain.setValueAtTime(0.025, now + i * 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.03 + 0.1);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(now + i * 0.03); osc.stop(now + i * 0.03 + 0.1);
+      });
+    } catch(e){}
+  },
+  hurt() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(110, now);
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.11);
+      g.gain.setValueAtTime(0.06, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.11);
+    } catch(e){}
+  },
+  subirNivel() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      [440, 554, 659, 880].forEach((f, i) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = "triangle"; osc.frequency.value = f;
+        g.gain.setValueAtTime(0.035, now + i * 0.055);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.12);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(now + i * 0.055); osc.stop(now + i * 0.055 + 0.12);
+      });
+    } catch(e){}
+  },
+  jefe() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(65, now);
+      osc.frequency.linearRampToValueAtTime(110, now + 0.25);
+      osc.frequency.linearRampToValueAtTime(50, now + 0.55);
+      g.gain.setValueAtTime(0.08, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.55);
+    } catch(e){}
+  },
+  muerte() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      [220, 207, 196, 185].forEach((f, i) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = "sawtooth"; osc.frequency.value = f;
+        g.gain.setValueAtTime(0.05, now + i * 0.14);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.14 + 0.22);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(now + i * 0.14); osc.stop(now + i * 0.14 + 0.22);
+      });
+    } catch(e){}
+  },
+  reliquia() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      [330, 440, 554, 659, 880, 1108].forEach((f, i) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = "triangle"; osc.frequency.value = f;
+        g.gain.setValueAtTime(0.04, now + i * 0.045);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.045 + 0.18);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(now + i * 0.045); osc.stop(now + i * 0.045 + 0.18);
+      });
+    } catch(e){}
+  },
+  uiSel() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sine"; osc.frequency.value = 520;
+      g.gain.setValueAtTime(0.03, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.04);
+    } catch(e){}
+  },
+  uiOk() {
+    if (silencio) return;
+    try {
+      const ctx = obtenerAudio(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "triangle"; osc.frequency.value = 880;
+      g.gain.setValueAtTime(0.04, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.07);
+    } catch(e){}
+  }
+};
+
+/* --- Sintetizador de Musica Chiptune (Loop Gotico) --- */
+const NOTAS = {
+  C2: 65.41, D2: 73.42, Eb2: 77.78, F2: 87.31, G2: 98.00, Ab2: 103.83, Bb2: 116.54, B2: 123.47,
+  C3: 130.81, D3: 146.83, Eb3: 155.56, F3: 174.61, G3: 196.00, Ab3: 207.65, Bb3: 233.08, B3: 246.94,
+  C4: 261.63, D4: 293.66, Eb4: 311.13, F4: 349.23, G4: 392.00, Ab4: 415.30, Bb4: 466.16, B4: 493.88,
+  C5: 523.25, D5: 587.33, Eb5: 622.25, G5: 783.99
+};
+
+const BASSLINE = [
+  NOTAS.C2, 0, NOTAS.C2, NOTAS.Eb2, NOTAS.G2, 0, NOTAS.C2, 0,
+  NOTAS.Ab2, 0, NOTAS.Ab2, NOTAS.C3, NOTAS.Eb3, 0, NOTAS.Ab2, 0,
+  NOTAS.Bb2, 0, NOTAS.Bb2, NOTAS.D3, NOTAS.F3, 0, NOTAS.Bb2, 0,
+  NOTAS.G2, 0, NOTAS.G2, NOTAS.B2, NOTAS.D3, 0, NOTAS.G2, 0
+];
+
+const MELODY = [
+  NOTAS.C4, NOTAS.Eb4, NOTAS.G4, NOTAS.C5, NOTAS.G4, NOTAS.Eb4, NOTAS.D4, NOTAS.Eb4,
+  NOTAS.C4, NOTAS.Eb4, NOTAS.Ab4, NOTAS.C5, NOTAS.Ab4, NOTAS.Eb4, NOTAS.D4, NOTAS.C4,
+  NOTAS.D4, NOTAS.F4, NOTAS.Bb4, NOTAS.D5, NOTAS.Bb4, NOTAS.F4, NOTAS.Eb4, NOTAS.D4,
+  NOTAS.B3, NOTAS.D4, NOTAS.G4, NOTAS.B4, NOTAS.G4, NOTAS.D4, NOTAS.C4, NOTAS.B3
+];
+
+function stepMusica() {
+  if (silencio || !musicaActiva || estado !== "juego") return;
+  try {
+    const ctx = obtenerAudio();
+    const now = ctx.currentTime;
+    const step = musicStep % 32;
+    musicStep++;
+
+    const freqB = BASSLINE[step];
+    if (freqB > 0) {
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = freqB;
+      g.gain.setValueAtTime(0.018, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.12);
+    }
+
+    const freqM = MELODY[step];
+    if (freqM > 0) {
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = freqM;
+      g.gain.setValueAtTime(0.022, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.14);
+    }
+
+    if (step % 2 === 1) {
+      const noise = ctx.createBufferSource();
+      noise.buffer = getNoiseBuffer(ctx);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "highpass";
+      filter.frequency.value = 7000;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(step % 4 === 2 ? 0.012 : 0.006, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+      noise.connect(filter); filter.connect(g); g.connect(ctx.destination);
+      noise.start(now); noise.stop(now + 0.035);
+    }
+  } catch(e){}
+}
+
+function iniciarMusica() {
+  if (musicInterval) clearInterval(musicInterval);
+  musicInterval = setInterval(stepMusica, 130);
+}
+
+/* Compatibilidad retro */
 function bip(freq, dur, tipo, vol) {
   if (silencio) return;
   try {
-    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === "suspended") audio.resume();
-    const o = audio.createOscillator(), g = audio.createGain();
+    const ctx = obtenerAudio(), now = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = tipo || "square"; o.frequency.value = freq;
-    g.gain.setValueAtTime((vol || 0.05), audio.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
-    o.connect(g); g.connect(audio.destination);
-    o.start(); o.stop(audio.currentTime + dur);
-  } catch (e) { /* sin audio, seguimos */ }
+    g.gain.setValueAtTime((vol || 0.05), now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(now); o.stop(now + dur);
+  } catch(e){}
 }
 
 /* ---------- Entrada ------------------------------------------------------- */
 const teclas = Object.create(null);
 const TECLAS_JUEGO = new Set(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," ","Spacebar"]);
 addEventListener("keydown", e => {
+  obtenerAudio();
+  if (!musicInterval) iniciarMusica();
   if (TECLAS_JUEGO.has(e.key)) e.preventDefault();
   teclas[e.key.toLowerCase()] = true;
-  if (!e.repeat) manejarTecla(e.key.toLowerCase());   // el autorepeat no debe alternar la pausa
+  if (!e.repeat) manejarTecla(e.key.toLowerCase());
 }, { passive: false });
 addEventListener("keyup", e => { teclas[e.key.toLowerCase()] = false; });
 addEventListener("blur", () => { for (const k in teclas) teclas[k] = false; });
 
 /* ---------- Definiciones de armas ---------------------------------------- */
-/* Cada arma: nivel 1..8, con stats por nivel y una funcion de disparo.       */
 const ARMAS = {
   daga: {
-    nombre: "Daga arrojadiza", glifo: "\u2192", color: C.claro,
-    desc: "Lanza dagas al enemigo mas cercano.",
+    get nombre() { return T("w_daga_name"); },
+    get desc() { return T("w_daga_desc"); },
+    glifo: "\u2192", color: C.claro,
     cd: n => 0.62 - 0.05 * (n - 1),
     disparar(J, n) {
       const cant = 1 + Math.floor(n / 2);
@@ -226,12 +744,13 @@ const ARMAS = {
         const a = ang + (i - (cant - 1) / 2) * 0.13;
         nuevoProyectil(J.x, J.y, Math.cos(a) * 46, Math.sin(a) * 46, dmg * J.poder, 1 + Math.floor(n / 3), 1.6, glifoDir(a), C.claro);
       }
-      bip(660, 0.04, "square", 0.03);
+      SFX.daga();
     }
   },
   latigo: {
-    nombre: "Latigo", glifo: "\u2261", color: C.oro,
-    desc: "Golpea en abanico a los lados, alternando.",
+    get nombre() { return T("w_latigo_name"); },
+    get desc() { return T("w_latigo_desc"); },
+    glifo: "\u2261", color: C.oro,
     cd: n => 1.1 - 0.07 * (n - 1),
     disparar(J, n) {
       const dmg = 14 + 7 * (n - 1);
@@ -245,12 +764,13 @@ const ARMAS = {
                          vida: 0.16, t: 0.16, ch: s > 0 ? "=" : "=", color: C.oro });
         }
       }
-      bip(300, 0.06, "sawtooth", 0.04);
+      SFX.latigo();
     }
   },
   ajo: {
-    nombre: "Aura de ajo", glifo: "o", color: C.verde,
-    desc: "Dana sin parar a lo que te rodea y lo empuja.",
+    get nombre() { return T("w_ajo_name"); },
+    get desc() { return T("w_ajo_desc"); },
+    glifo: "o", color: C.verde,
     cd: n => 0.5,
     disparar(J, n) {
       const r = (7 + 1.5 * n) * J.area;
@@ -261,11 +781,13 @@ const ARMAS = {
         e.x += (e.x - J.x) / d * 0.6; e.y += (e.y - J.y) / d * 0.6;
       }
       J.auraR = r; J.auraT = 0.5;
+      SFX.ajo();
     }
   },
   orbitas: {
-    nombre: "Cruces orbitales", glifo: "+", color: C.azul,
-    desc: "Cruces que giran a tu alrededor.",
+    get nombre() { return T("w_orbitas_name"); },
+    get desc() { return T("w_orbitas_desc"); },
+    glifo: "+", color: C.azul,
     cd: n => 0.18,
     disparar(J, n) {
       const cant = 2 + Math.floor((n - 1) / 1.5);
@@ -275,8 +797,9 @@ const ARMAS = {
     }
   },
   rayo: {
-    nombre: "Rayo", glifo: "\u00a1", color: C.morado,
-    desc: "Cae sobre enemigos al azar.",
+    get nombre() { return T("w_rayo_name"); },
+    get desc() { return T("w_rayo_desc"); },
+    glifo: "\u00a1", color: C.morado,
     cd: n => 2.4 - 0.18 * (n - 1),
     disparar(J, n) {
       const golpes = 1 + Math.floor(n / 2);
@@ -289,12 +812,13 @@ const ARMAS = {
         for (let k = 0; k < 7; k++)
           efectos.push({ x: e.x + rnd(-1, 1), y: e.y - k * 2.2, vida: 0.22, t: 0.22, ch: k % 2 ? "\\" : "/", color: C.morado });
       }
-      bip(120, 0.12, "sawtooth", 0.05);
+      SFX.rayo();
     }
   },
   biblia: {
-    nombre: "Biblia maldita", glifo: "\u00a7", color: C.rosa,
-    desc: "Libros que orbitan lejos y atraviesan todo.",
+    get nombre() { return T("w_biblia_name"); },
+    get desc() { return T("w_biblia_desc"); },
+    glifo: "\u00a7", color: C.rosa,
     cd: n => 4.0 - 0.25 * (n - 1),
     disparar(J, n) {
       const cant = 1 + Math.floor(n / 2);
@@ -303,70 +827,69 @@ const ARMAS = {
         const p = nuevoProyectil(J.x, J.y, 0, 0, (10 + 5 * (n - 1)) * J.poder, 999, 3.2, "\u00a7", C.rosa);
         p.orbita = { a, r: 0, rMax: (16 + n) * J.area, vel: 3.4 };
       }
-      bip(520, 0.08, "triangle", 0.035);
+      SFX.biblia();
     }
   }
 };
 
 /* Mejoras pasivas */
 const PASIVAS = {
-  botas:   { nombre: "Botas aladas",  desc: "+12% velocidad",        max: 5, glifo: "\u00bb", color: C.verde2, aplicar: J => J.velBase *= 1.12 },
-  corazon: { nombre: "Corazon",       desc: "+20 vida max y cura",   max: 5, glifo: "\u2665", color: C.rojo,   aplicar: J => { J.vidaMax += 20; J.vida = Math.min(J.vidaMax, J.vida + 20); } },
-  furia:   { nombre: "Furia",         desc: "+15% dano",             max: 5, glifo: "\u2191", color: C.naranja,aplicar: J => J.poder *= 1.15 },
-  reloj:   { nombre: "Reloj roto",    desc: "-12% enfriamiento",     max: 5, glifo: "\u00b0", color: C.azul,   aplicar: J => J.cd *= 0.88 },
-  esfera:  { nombre: "Esfera",        desc: "+20% area",             max: 5, glifo: "()",     color: C.morado, aplicar: J => J.area *= 1.20 },
-  iman:    { nombre: "Iman",          desc: "+40% radio de recogida",max: 5, glifo: "U",      color: C.oro,    aplicar: J => J.iman *= 1.40 },
-  armadura:{ nombre: "Armadura",      desc: "-1 dano recibido",      max: 5, glifo: "#",      color: C.gris,   aplicar: J => J.armadura += 1 },
-  vendas:  { nombre: "Vendas",        desc: "+0.4 vida/seg",         max: 4, glifo: "+",      color: C.verde,  aplicar: J => J.regen += 0.4 }
+  botas:   { get nombre() { return T("p_botas_name"); },   get desc() { return T("p_botas_desc"); },   max: 5, glifo: "\u00bb", color: C.verde2, aplicar: J => J.velBase *= 1.12 },
+  corazon: { get nombre() { return T("p_corazon_name"); }, get desc() { return T("p_corazon_desc"); }, max: 5, glifo: "\u2665", color: C.rojo,   aplicar: J => { J.vidaMax += 20; J.vida = Math.min(J.vidaMax, J.vida + 20); } },
+  furia:   { get nombre() { return T("p_furia_name"); },   get desc() { return T("p_furia_desc"); },   max: 5, glifo: "\u2191", color: C.naranja,aplicar: J => J.poder *= 1.15 },
+  reloj:   { get nombre() { return T("p_reloj_name"); },   get desc() { return T("p_reloj_desc"); },   max: 5, glifo: "\u00b0", color: C.azul,   aplicar: J => J.cd *= 0.88 },
+  esfera:  { get nombre() { return T("p_esfera_name"); },  get desc() { return T("p_esfera_desc"); },  max: 5, glifo: "()",     color: C.morado, aplicar: J => J.area *= 1.20 },
+  iman:    { get nombre() { return T("p_iman_name"); },    get desc() { return T("p_iman_desc"); },    max: 5, glifo: "U",      color: C.oro,    aplicar: J => J.iman *= 1.40 },
+  armadura:{ get nombre() { return T("p_armadura_name"); },get desc() { return T("p_armadura_desc"); },max: 5, glifo: "#",      color: C.gris,   aplicar: J => J.armadura += 1 },
+  vendas:  { get nombre() { return T("p_vendas_name"); },  get desc() { return T("p_vendas_desc"); },  max: 4, glifo: "+",      color: C.verde,  aplicar: J => J.regen += 0.4 }
 };
 
 /* ---------- Progreso permanente (tienda y personajes) --------------------- */
-/* Se guarda en localStorage; si el navegador lo bloquea, la partida sigue
-   funcionando y el progreso solo dura la sesion. */
 const CLAVE = "vampire-asscii-v1";
-let guardado = { oro: 0, mejoras: {}, personajes: ["aldeano"], elegido: "aldeano", record: 0, mejorNivel: 1 };
+let guardado = { oro: 0, mejoras: {}, personajes: ["aldeano"], elegido: "aldeano", record: 0, mejorNivel: 1, idioma: "auto" };
 
 function cargarProgreso() {
   try {
     const s = localStorage.getItem(CLAVE);
     if (s) Object.assign(guardado, JSON.parse(s));
-  } catch (e) { /* sin almacenamiento, progreso solo en memoria */ }
+  } catch (e) {}
+  actualizarMenuTitulos();
 }
 function guardarProgreso() {
-  try { localStorage.setItem(CLAVE, JSON.stringify(guardado)); } catch (e) { /* idem */ }
+  try { localStorage.setItem(CLAVE, JSON.stringify(guardado)); } catch (e) {}
 }
 
-/* Mejoras permanentes: se compran con oro y valen para todas las partidas. */
+/* Mejoras permanentes */
 const TIENDA = {
-  vigor:    { nombre: "Vigor",      desc: "+12% vida maxima",      max: 5, coste: 60,  inc: 45, glifo: "♥" },
-  fuerza:   { nombre: "Fuerza",     desc: "+8% dano",              max: 5, coste: 80,  inc: 65, glifo: "↑" },
-  prisa:    { nombre: "Prisa",      desc: "+5% velocidad",         max: 4, coste: 70,  inc: 55, glifo: "»" },
-  pulso:    { nombre: "Pulso",      desc: "-5% enfriamiento",      max: 4, coste: 90,  inc: 70, glifo: "°" },
-  magnetita:{ nombre: "Magnetita",  desc: "+20% radio de recogida",max: 3, coste: 70,  inc: 60, glifo: "U" },
-  codicia:  { nombre: "Codicia",    desc: "+25% oro que sueltan",  max: 4, coste: 100, inc: 80, glifo: "$" },
-  coraza:   { nombre: "Coraza",     desc: "-1 dano recibido",      max: 3, coste: 120, inc: 100,glifo: "#" },
-  reliquia: { nombre: "Reliquia",   desc: "revives una vez",       max: 1, coste: 500, inc: 0,  glifo: "✝" }
+  vigor:    { get nombre() { return T("t_vigor_name"); },    get desc() { return T("t_vigor_desc"); },    max: 5, coste: 60,  inc: 45, glifo: "♥" },
+  fuerza:   { get nombre() { return T("t_fuerza_name"); },   get desc() { return T("t_fuerza_desc"); },   max: 5, coste: 80,  inc: 65, glifo: "↑" },
+  prisa:    { get nombre() { return T("t_prisa_name"); },    get desc() { return T("t_prisa_desc"); },    max: 4, coste: 70,  inc: 55, glifo: "»" },
+  pulso:    { get nombre() { return T("t_pulso_name"); },    get desc() { return T("t_pulso_desc"); },    max: 4, coste: 90,  inc: 70, glifo: "°" },
+  magnetita:{ get nombre() { return T("t_magnetita_name"); },get desc() { return T("t_magnetita_desc"); },max: 3, coste: 70,  inc: 60, glifo: "U" },
+  codicia:  { get nombre() { return T("t_codicia_name"); },  get desc() { return T("t_codicia_desc"); },  max: 4, coste: 100, inc: 80, glifo: "$" },
+  coraza:   { get nombre() { return T("t_coraza_name"); },   get desc() { return T("t_coraza_desc"); },   max: 3, coste: 120, inc: 100,glifo: "#" },
+  reliquia: { get nombre() { return T("t_reliquia_name"); }, get desc() { return T("t_reliquia_desc"); }, max: 1, coste: 500, inc: 0,  glifo: "✝" }
 };
 const costeMejora = (id) => TIENDA[id].coste + TIENDA[id].inc * (guardado.mejoras[id] || 0);
 
-/* Personajes: cambian el arma inicial y el reparto de estadisticas. */
+/* Personajes */
 const PERSONAJES = [
-  { id:"aldeano",     glifo:"@", nombre:"Aldeano",     arma:"daga",
-    desc:"Equilibrado. La escuela clasica.",        coste:0,   vida:100, vel:14.5, poder:1,    area:1,   cd:1,    armadura:0 },
-  { id:"cazadora",    glifo:"Y", nombre:"Cazadora",    arma:"latigo",
-    desc:"Veloz y fragil. Golpea a los lados.",     coste:150, vida:80,  vel:17.0, poder:1,    area:1.1, cd:1,    armadura:0 },
-  { id:"monje",       glifo:"&", nombre:"Monje",       arma:"ajo",
-    desc:"Lento, pero su aura es enorme.",          coste:250, vida:130, vel:12.5, poder:0.9,  area:1.4, cd:1,    armadura:0 },
-  { id:"sepulturero", glifo:"#", nombre:"Sepulturero", arma:"orbitas",
-    desc:"Duro como una lapida.",                   coste:400, vida:170, vel:12.0, poder:1,    area:1.15,cd:1.05, armadura:2 },
-  { id:"alquimista",  glifo:"%", nombre:"Alquimista",  arma:"rayo",
-    desc:"Pega como un tren, aguanta como un vaso.",coste:550, vida:70,  vel:14.5, poder:1.3,  area:1,   cd:1,    armadura:0 },
-  { id:"hereje",      glifo:"!", nombre:"Hereje",      arma:"biblia",
-    desc:"Cadencia infernal y buen iman.",          coste:700, vida:90,  vel:14.5, poder:1,    area:1,   cd:0.82, armadura:0 }
+  { id:"aldeano",     glifo:"@", get nombre() { return T("c_aldeano_name"); },     arma:"daga",
+    get desc() { return T("c_aldeano_desc"); },        coste:0,   vida:100, vel:14.5, poder:1,    area:1,   cd:1,    armadura:0 },
+  { id:"cazadora",    glifo:"Y", get nombre() { return T("c_cazadora_name"); },    arma:"latigo",
+    get desc() { return T("c_cazadora_desc"); },       coste:150, vida:80,  vel:17.0, poder:1,    area:1.1, cd:1,    armadura:0 },
+  { id:"monje",       glifo:"&", get nombre() { return T("c_monje_name"); },       arma:"ajo",
+    get desc() { return T("c_monje_desc"); },          coste:250, vida:130, vel:12.5, poder:0.9,  area:1.4, cd:1,    armadura:0 },
+  { id:"sepulturero", glifo:"#", get nombre() { return T("c_sepulturero_name"); }, arma:"orbitas",
+    get desc() { return T("c_sepulturero_desc"); },    coste:400, vida:170, vel:12.0, poder:1,    area:1.15,cd:1.05, armadura:2 },
+  { id:"alquimista",  glifo:"%", get nombre() { return T("c_alquimista_name"); },  arma:"rayo",
+    get desc() { return T("c_alquimista_desc"); },     coste:550, vida:70,  vel:14.5, poder:1.3,  area:1,   cd:1,    armadura:0 },
+  { id:"hereje",      glifo:"!", get nombre() { return T("c_hereje_name"); },      arma:"biblia",
+    get desc() { return T("c_hereje_desc"); },         coste:700, vida:90,  vel:14.5, poder:1,    area:1,   cd:0.82, armadura:0 }
 ];
 const personajePorId = id => PERSONAJES.find(p => p.id === id) || PERSONAJES[0];
 
-/* ---------- Tipos de enemigo --------------------------------------------- */
+/* Tipos de enemigo */
 const TIPOS = [
   { id:"z", ch:"z", nombre:"zombi",     color:C.verde2, vida:14,  vel:7.4,  dmg:6,  xp:1, desde:0   },
   { id:"v", ch:"v", nombre:"murcielago",color:C.morado, vida:8,   vel:12.5, dmg:4,  xp:1, desde:35  },
@@ -396,7 +919,6 @@ function nuevoJugador() {
   J.armas[P.arma] = 1;
   J.temporiz[P.arma] = 0;
 
-  // Mejoras compradas en la tienda, encima de la base del personaje.
   J.vidaMax  = Math.round(P.vida * (1 + 0.12 * niv("vigor")));
   J.vida     = J.vidaMax;
   J.poder   *= 1 + 0.08 * niv("fuerza");
@@ -410,6 +932,7 @@ function nuevoJugador() {
 }
 
 function reiniciar() {
+  actualizarMenuTitulos();
   J = nuevoJugador();
   enemigos = []; proyectiles = []; gemas = []; curas = []; monedas = []; efectos = []; flotantes = [];
   oroRun = 0; botinRun = 0;
@@ -465,7 +988,6 @@ function golpeArea(x, y, r, dmg, sacude) {
 function danarEnemigo(e, dmg, parpadeo) {
   if (e.vida <= 0) return;
   e.vida -= dmg; e.flash = parpadeo || 0.08;
-  // Sin esto la pantalla se llena de cifras y deja de leerse la horda.
   if (flotantes.length < 16 && (e.jefe || dmg >= 30 || Math.random() < 0.12))
     flotantes.push({ x: e.x, y: e.y, t: 0.5, vida: 0.5, txt: String(Math.round(dmg)), color: dmg > 25 ? C.naranja : C.claro });
   if (e.vida <= 0) matarEnemigo(e);
@@ -473,20 +995,17 @@ function danarEnemigo(e, dmg, parpadeo) {
 function matarEnemigo(e) {
   matados++;
   gemas.push({ x: e.x, y: e.y, xp: e.xp, vx: rnd(-6, 6), vy: rnd(-6, 6), t: 0 });
-  // Los enemigos gordos y los jefes sueltan carne: el unico modo de curarse sin pasivas.
   if (e.jefe || (e.tipo.vida >= 70 && Math.random() < 0.12)) curas.push({ x: e.x, y: e.y, t: 0 });
-  // Monedas: es el oro que se lleva a la tienda entre partidas.
   const monto = e.jefe ? rndi(30, 50) : (Math.random() < 0.18 ? rndi(2, 5) : 0);
   if (monto > 0) monedas.push({ x: e.x, y: e.y, oro: Math.max(1, Math.round(monto * J.codicia)), t: 0 });
   for (let i = 0; i < 3; i++)
     efectos.push({ x: e.x + rnd(-1.5, 1.5), y: e.y + rnd(-1.5, 1.5), vida: 0.25, t: 0.25, ch: elegir(["\u00b7","'",","]), color: C.sangre });
-  bip(180 + Math.random() * 60, 0.05, "square", 0.025);
+  SFX.hitEnemigo();
 }
 
 /* ---------- Aparicion de enemigos ----------------------------------------- */
 function factorDificultad() { return 1 + tiempo / 140 + Math.pow(tiempo / 260, 2); }
 
-/* Punto justo fuera del borde visible: la horda entra en escena enseguida. */
 function puntoBorde(margen) {
   const hw = COLS / 2 + (margen || 3), hh = (FILAS * ASPECTO) / 2 + (margen || 3);
   const t = Math.random();
@@ -513,14 +1032,13 @@ function aparecerEnemigo(tipo, margen) {
 function directorSpawn(dt) {
   proxSpawn -= dt;
   const ritmo = clamp(0.95 - tiempo / 320, 0.11, 0.95);
-  const tope  = Math.min(380, 70 + tiempo * 1.1);   // techo de horda viva
+  const tope  = Math.min(380, 70 + tiempo * 1.1);
   if (proxSpawn <= 0 && enemigos.length < tope) {
     proxSpawn = ritmo;
     const disp = TIPOS.filter(t => tiempo >= t.desde);
     const cant = 1 + Math.floor(tiempo / 90);
     for (let i = 0; i < cant; i++) enemigos.push(aparecerEnemigo(elegir(disp)));
   }
-  // Oleada cerrada cada 30 s: un anillo que rodea al jugador.
   if (tiempo > oleada * 30 && tiempo > 20) {
     oleada++;
     const t = elegir(TIPOS.filter(x => tiempo >= x.desde));
@@ -530,9 +1048,8 @@ function directorSpawn(dt) {
       e.x = J.x + Math.cos(a) * rx; e.y = J.y + Math.sin(a) * ry;
       enemigos.push(e);
     }
-    flotantes.push({ x: J.x, y: J.y - 8, t: 1.6, vida: 1.6, txt: "\u00a1OLEADA!", color: C.rojo });
+    flotantes.push({ x: J.x, y: J.y - 8, t: 1.6, vida: 1.6, txt: T("wave_alert"), color: C.rojo });
   }
-  // Jefe cada 60 s.
   if (tiempo >= jefeProx) {
     jefeProx += 60;
     const base = TIPOS[TIPOS.length - 1], e = aparecerEnemigo(base, 5);
@@ -540,22 +1057,20 @@ function directorSpawn(dt) {
     e.vida = e.vidaMax = base.vida * factorDificultad() * 14;
     e.vel = 5.2; e.dmg *= 1.6; e.xp = 60;
     enemigos.push(e);
-    flotantes.push({ x: J.x, y: J.y - 10, t: 2.2, vida: 2.2, txt: "\u00a1\u00a1JEFE!!", color: C.rojo });
-    bip(80, 0.5, "sawtooth", 0.06);
+    flotantes.push({ x: J.x, y: J.y - 10, t: 2.2, vida: 2.2, txt: T("boss_alert"), color: C.rojo });
+    SFX.jefe();
   }
 }
 
 /* ---------- Fin de partida ------------------------------------------------ */
 function terminarPartida() {
   estado = "fin";
-  // Botin por aguantar: sin esto, una partida larga sin matar mucho no daba casi oro.
   botinRun = Math.floor(tiempo / 8) + J.nivel * 3;
-  // El oro de la partida se ingresa aqui: es lo que se gasta en la tienda.
   guardado.oro += oroRun + botinRun;
   if (tiempo > guardado.record) guardado.record = tiempo;
   if (J.nivel > guardado.mejorNivel) guardado.mejorNivel = J.nivel;
   guardarProgreso();
-  bip(70, 0.9, "sawtooth", 0.07);
+  SFX.muerte();
 }
 
 /* ---------- Subida de nivel ----------------------------------------------- */
@@ -566,7 +1081,7 @@ function generarOpciones() {
     if (n === 0 && Object.keys(J.armas).length >= 5) continue;
     if (n >= 8) continue;
     pool.push({ tipo: "arma", id, nivel: n + 1,
-      nombre: ARMAS[id].nombre, desc: n === 0 ? ARMAS[id].desc : "Sube a nivel " + (n + 1),
+      nombre: ARMAS[id].nombre, desc: n === 0 ? ARMAS[id].desc : T("upg_to_level") + (n + 1),
       glifo: ARMAS[id].glifo, color: ARMAS[id].color, peso: n === 0 ? 3 : 4 });
   }
   for (const id in PASIVAS) {
@@ -583,7 +1098,7 @@ function generarOpciones() {
     sel.push(o);
     bolsa = bolsa.filter(x => !(x.tipo === o.tipo && x.id === o.id));
   }
-  if (!sel.length) sel.push({ tipo: "cura", id: "cura", nombre: "Festin", desc: "Recupera 40 de vida", glifo: "\u2665", color: C.rojo });
+  if (!sel.length) sel.push({ tipo: "cura", id: "cura", nombre: T("feast_name"), desc: T("feast_desc"), glifo: "\u2665", color: C.rojo });
   return sel;
 }
 
@@ -599,10 +1114,9 @@ function aplicarOpcion(o) {
   }
   J.pendientes = Math.max(0, J.pendientes - 1);
   estado = "juego"; opciones = null;
-  bip(880, 0.09, "triangle", 0.05);
+  SFX.uiOk();
 }
 
-/* Los niveles se encolan: cada uno abrira su propio menu, uno detras de otro. */
 function subirNivel() {
   J.nivel++;
   J.xp -= J.xpProx;
@@ -612,7 +1126,7 @@ function subirNivel() {
 function abrirMenuPendiente() {
   if (J.pendientes <= 0 || estado !== "juego") return;
   opciones = generarOpciones(); seleccion = 0; estado = "nivel";
-  bip(520, 0.08, "triangle", 0.05); setTimeout(() => bip(780, 0.1, "triangle", 0.05), 90);
+  SFX.subirNivel();
 }
 
 /* ---------- Actualizacion ------------------------------------------------- */
@@ -630,7 +1144,6 @@ function actualizar(dt) {
   if (teclas["w"] || teclas["arrowup"])    my -= 1;
   if (teclas["s"] || teclas["arrowdown"])  my += 1;
   if (!mx && !my && puntero) {
-    // Tactil o raton mantenido: el jugador va hacia donde tocas (el esta siempre en el centro).
     const r = cv.getBoundingClientRect();
     const px = puntero.x - r.left - r.width / 2, py = puntero.y - r.top - r.height / 2;
     if (Math.hypot(px, py) > 10) { mx = px; my = py; }
@@ -677,10 +1190,9 @@ function actualizar(dt) {
     if (e.vida <= 0) { enemigos.splice(i, 1); continue; }
     if (e.flash > 0) e.flash -= dt;
     const dx = J.x - e.x, dy = J.y - e.y, d = Math.hypot(dx, dy) || 1;
-    if (!e.jefe && d > COLS * 1.6) { enemigos.splice(i, 1); continue; }   // fuera de alcance: reciclar
+    if (!e.jefe && d > COLS * 1.6) { enemigos.splice(i, 1); continue; }
     e.x += (dx / d) * e.vel * dt;
     e.y += (dy / d) * e.vel * dt;
-    // Separacion para que la horda no se apile en una sola celda
     const vec = enemigosCerca(e.x, e.y, 1.7);
     for (const o of vec) {
       if (o === e) continue;
@@ -691,14 +1203,14 @@ function actualizar(dt) {
       const dano = Math.max(1, e.dmg - J.armadura);
       J.vida -= dano; J.invul = 0.7; sacudida = Math.max(sacudida, 4);
       flotantes.push({ x: J.x, y: J.y - 2, t: 0.6, vida: 0.6, txt: "-" + Math.round(dano), color: C.rojo });
-      bip(90, 0.12, "square", 0.05);
+      SFX.hurt();
       if (J.vida <= 0) {
-        if (J.revivir > 0) {                 // la Reliquia de la tienda
+        if (J.revivir > 0) {
           J.revivir--;
           J.vida = J.vidaMax; J.invul = 3; sacudida = 12;
           golpeArea(J.x, J.y, 26 * J.area, 9999, 10);
-          flotantes.push({ x: J.x, y: J.y - 4, t: 2, vida: 2, txt: "¡RELIQUIA!", color: C.oro });
-          bip(200, 0.5, "triangle", 0.07);
+          flotantes.push({ x: J.x, y: J.y - 4, t: 2, vida: 2, txt: T("relic_alert"), color: C.oro });
+          SFX.reliquia();
         } else {
           terminarPartida();
         }
@@ -727,16 +1239,15 @@ function actualizar(dt) {
     }
   }
 
-  /* Gemas de experiencia */
+  /* Gemas */
   const radio = 11 * J.iman;
   for (let i = gemas.length - 1; i >= 0; i--) {
     const g = gemas[i];
     g.t += dt;
     const dx = J.x - g.x, dy = J.y - g.y, d = Math.hypot(dx, dy) || 1;
-    if (g.t > 7) g.atraida = true;               // las gemas viejas te buscan solas
+    if (g.t > 7) g.atraida = true;
     if (d < radio || g.atraida) {
       g.atraida = true;
-      // Ojo: sin el maximo, una gema lejana obtenia velocidad negativa y huia del jugador.
       const v = Math.max(24, 30 + (radio - d) * 4);
       g.x += (dx / d) * v * dt; g.y += (dy / d) * v * dt;
     } else {
@@ -746,8 +1257,8 @@ function actualizar(dt) {
     if (d < 1.4) {
       gemas.splice(i, 1);
       J.xp += g.xp;
-      bip(1100, 0.03, "sine", 0.02);
-      while (J.xp >= J.xpProx) subirNivel();     // varias gemas de golpe = varios niveles
+      SFX.gema();
+      while (J.xp >= J.xpProx) subirNivel();
     }
   }
 
@@ -762,7 +1273,7 @@ function actualizar(dt) {
       curas.splice(i, 1);
       J.vida = Math.min(J.vidaMax, J.vida + 30);
       flotantes.push({ x: J.x, y: J.y - 2, t: 0.9, vida: 0.9, txt: "+30", color: C.verde });
-      bip(920, 0.12, "sine", 0.05);
+      SFX.cura();
     }
   }
 
@@ -776,7 +1287,7 @@ function actualizar(dt) {
     if (md < 1.6) {
       monedas.splice(i, 1);
       oroRun += m.oro;
-      bip(1400, 0.04, "square", 0.02);
+      SFX.moneda();
     }
   }
 
@@ -785,20 +1296,13 @@ function actualizar(dt) {
   for (let i = flotantes.length - 1; i >= 0; i--) { const f = flotantes[i]; f.t -= dt; f.y -= dt * 5; if (f.t <= 0) flotantes.splice(i, 1); }
 
   directorSpawn(dt);
-
   abrirMenuPendiente();
 }
 
 /* ---------- Dibujo -------------------------------------------------------- */
-/* Todo el mundo comparte la misma fase: celda entera + un desplazamiento en
-   pixeles comun. Antes el fondo saltaba media celda antes que las entidades y
-   el scroll se veia a trompicones. */
 let baseCol = 0, baseFila = 0, desplX = 0, desplY = 0;
 
 function situarCamara() {
-  // Se interpola la posicion del jugador con el resto del acumulador: con paso
-  // fijo a 60 Hz unos fotogramas ejecutan dos pasos y otros ninguno, y sin esto
-  // el scroll continuo delata ese vaiven.
   const px = J.xPrev + (J.x - J.xPrev) * alfa;
   const py = J.yPrev + (J.y - J.yPrev) * alfa;
   cam.x = px - COLS / 2;
@@ -828,7 +1332,6 @@ function dibujarMundo() {
   situarCamara();
   dibujarFondo();
 
-  // Aura de ajo
   if (J.auraT > 0 && J.auraR > 0) {
     const pasos = Math.max(16, Math.floor(J.auraR * 2));
     for (let i = 0; i < pasos; i++) {
@@ -837,22 +1340,21 @@ function dibujarMundo() {
     }
   }
 
-  // Gemas
   for (const g of gemas) {
     const ch = g.xp >= 20 ? "\u2666" : g.xp >= 5 ? "\u25c6" : "*";
     const col = g.xp >= 20 ? C.oro : g.xp >= 5 ? C.rosa : C.azul;
     pon(aCol(g.x), aFila(g.y), ch, col, 2);
   }
 
-  // Curaciones (parpadean cuando estan a punto de desaparecer)
   for (const c of curas)
     if (c.t < 20 || Math.floor(c.t * 6) % 2)
       pon(aCol(c.x), aFila(c.y), "♥", C.rojo, 4);
 
-  // Efectos
+  for (const m of monedas)
+    pon(aCol(m.x), aFila(m.y), "$", C.oro, 3);
+
   for (const f of efectos) pon(aCol(f.x), aFila(f.y), f.ch, f.color, 5);
 
-  // Enemigos (con conteo de apilamiento)
   const pila = new Map();
   for (const e of enemigos) {
     const c = aCol(e.x), f = aFila(e.y);
@@ -868,10 +1370,8 @@ function dibujarMundo() {
     if (zM[k] <= 6) pon(c, f, n > 9 ? "\u2593" : "\u2592", C.sangre, 7);
   }
 
-  // Proyectiles
   for (const p of proyectiles) pon(aCol(p.x), aFila(p.y), p.ch, p.color, 9);
 
-  // Cruces orbitales
   if (J.orb) {
     for (let i = 0; i < J.orb.cant; i++) {
       const a = J.orbA + (i / J.orb.cant) * Math.PI * 2;
@@ -879,14 +1379,11 @@ function dibujarMundo() {
     }
   }
 
-  // Jugador: siempre por encima de todo lo demas del mundo
   const parpadeo = J.invul > 0 && Math.floor(J.invul * 20) % 2 === 0;
   pon(aCol(J.x), aFila(J.y), J.glifo, parpadeo ? C.rojo : C.blanco, 50);
 
-  // Numeros flotantes
   for (const f of flotantes) texto(aCol(f.x) - Math.floor(f.txt.length / 2), aFila(f.y), f.txt, f.color, 40);
 
-  // Indicadores de jefe fuera de pantalla (pegados al borde visible)
   for (const e of enemigos) {
     if (!e.jefe) continue;
     const c = aCol(e.x), f = aFila(e.y);
@@ -902,43 +1399,40 @@ function barra(c, f, ancho, frac, chLleno, colLleno, colVacio) {
 
 function dibujarHUD() {
   const f0 = FILAS - 3;
-  // La banda del HUD es opaca: si no, el mundo se ve entre los caracteres.
   for (let f = f0 - 1; f < FILAS; f++) for (let c = 0; c < COLS; c++) fondoUI(c, f, C.fondo);
   for (let c = 0; c < COLS; c++) pon(c, f0 - 1, "\u2500", C.muro, 58);
 
   const min = Math.floor(tiempo / 60), seg = Math.floor(tiempo % 60);
   const reloj = (min < 10 ? "0" : "") + min + ":" + (seg < 10 ? "0" : "") + seg;
 
-  texto(1, f0, "VIDA", C.gris);
+  texto(1, f0, T("hud_hp"), C.gris);
   barra(6, f0, 22, J.vida / J.vidaMax, "\u2588", J.vida / J.vidaMax > 0.3 ? C.rojo : C.sangre, C.fondo2);
   texto(29, f0, Math.max(0, Math.ceil(J.vida)) + "/" + J.vidaMax, C.claro);
 
-  texto(1, f0 + 1, "EXP ", C.gris);
+  texto(1, f0 + 1, T("hud_xp"), C.gris);
   barra(6, f0 + 1, 22, J.xp / J.xpProx, "\u2588", C.azul, C.fondo2);
-  texto(29, f0 + 1, "Nv." + J.nivel, C.oro);
+  texto(29, f0 + 1, T("hud_lv") + J.nivel, C.oro);
 
   texto(38, f0, "\u23f1 " + reloj, C.claro);
   texto(38, f0 + 1, "\u2620 " + matados, C.sangre);
   texto(46, f0, "$ " + oroRun, C.oro);
 
-  // Inventario de armas y pasivas
   let c = 52;
-  texto(c, f0, "ARMAS:", C.gris); c += 7;
+  texto(c, f0, T("hud_weapons"), C.gris); c += 8;
   for (const id in J.armas) { texto(c, f0, ARMAS[id].glifo + String(J.armas[id]), ARMAS[id].color); c += 3; }
   let c2 = 52;
-  texto(c2, f0 + 1, "OBJET:", C.gris); c2 += 7;
+  texto(c2, f0 + 1, T("hud_items"), C.gris); c2 += 8;
   for (const id in J.pasivas) { texto(c2, f0 + 1, PASIVAS[id].glifo[0] + String(J.pasivas[id]), PASIVAS[id].color); c2 += 3; }
 
-  const ayuda = "WASD/flechas  P pausa  M " + (silencio ? "sonido" : "silencio");
+  const ayuda = T("hud_help");
   if (COLS > 96) texto(COLS - ayuda.length - 1, f0 + 1, ayuda, C.fondo2);
 
-  // Barra de vida del jefe mas cercano
   let jefe = null;
   for (const e of enemigos) if (e.jefe && (!jefe || e.vida > jefe.vida)) jefe = e;
   if (jefe) {
     const ancho = Math.min(48, COLS - 20);
     const c3 = Math.floor((COLS - ancho) / 2);
-    texto(c3 - 8, 1, "Ω JEFE", C.rojo);
+    texto(c3 - 8, 1, T("hud_boss"), C.rojo);
     barra(c3, 1, ancho, jefe.vida / jefe.vidaMax, "█", C.sangre, C.fondo2);
   }
 }
@@ -946,16 +1440,16 @@ function dibujarHUD() {
 function dibujarMenuNivel() {
   const w = Math.min(64, COLS - 4), h = 16, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor((FILAS - h) / 2) - 1;
   caja(c0, f0, w, h, C.oro, true);
-  textoCentrado(f0 + 1, "-=  \u00a1NIVEL " + J.nivel + "!  =-", C.oro);
-  textoCentrado(f0 + 2, "elige una mejora  (1 / 2 / 3)", C.gris);
+  textoCentrado(f0 + 1, T("lvlup_title", J.nivel), C.oro);
+  textoCentrado(f0 + 2, T("lvlup_choose"), C.gris);
   for (let i = 0; i < opciones.length; i++) {
     const o = opciones[i], f = f0 + 4 + i * 3, sel = i === seleccion;
     if (sel) for (let x = 1; x < w - 1; x++) pon(c0 + x, f, " ", C.fondo2, 57);
     texto(c0 + 3, f, (sel ? "\u25b6 " : "  ") + (i + 1) + ". " + o.glifo + " " + o.nombre +
-          (o.nivel > 1 ? "  Nv." + o.nivel : "  \u00a1NUEVO!"), sel ? C.blanco : o.color, 60);
+          (o.nivel > 1 ? "  Nv." + o.nivel : "  " + T("lvlup_new")), sel ? C.blanco : o.color, 60);
     texto(c0 + 8, f + 1, o.desc, C.gris, 60);
   }
-  textoCentrado(f0 + h - 2, "\u2191\u2193 mover  \u00b7  Enter aceptar", C.muro);
+  textoCentrado(f0 + h - 2, T("lvlup_help"), C.muro);
 }
 
 /* Fuente de bloques 5x5 para el rotulo del titulo */
@@ -985,29 +1479,26 @@ function rotulo(f0, palabra, color) {
   return ancho;
 }
 
-const MENU_TITULO = ["JUGAR", "TIENDA", "PERSONAJES"];
-
 function relojCorto(t) {
   const m = Math.floor(t / 60), s = Math.floor(t % 60);
   return m + "m " + (s < 10 ? "0" : "") + s + "s";
 }
 function recorta(s, n) { return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s; }
-function bolsa(n, max, color) {          // ●●●○○ para los niveles comprados
+function bolsa(n, max) {
   let s = "";
   for (let i = 0; i < max; i++) s += i < n ? "●" : "○";
   return s;
 }
 
 function dibujarTitulo() {
-  // En pantallas bajas se recorta la paja para que el menu no se salga por abajo.
   const compacto = FILAS < 28;
   const f0 = Math.max(0, Math.floor((FILAS - (compacto ? 18 : 21)) / 2));
   rotulo(f0, "VAMPIRE", C.sangre);
   rotulo(f0 + 6, "ASSCII", C.rojo);
 
   let f = f0 + 12;
-  textoCentrado(f++, "sobrevive a la horda escrita en caracteres", C.gris);
-  if (!compacto) textoCentrado(f++, "z v S w O Ω la horda  ·  * gemas  ·  $ oro  ·  ♥ vida", C.muro);
+  textoCentrado(f++, T("subtitle"), C.gris);
+  if (!compacto) textoCentrado(f++, T("legend"), C.muro);
   f++;
 
   const P = personajePorId(guardado.elegido);
@@ -1015,7 +1506,7 @@ function dibujarTitulo() {
   ultimaBaseMenu = f;
   for (let i = 0; i < MENU_TITULO.length; i++) {
     const sel = i === menuSel;
-    const extra = i === 0 ? "   con " + P.glifo + " " + P.nombre
+    const extra = i === 0 ? "   " + T("with") + " " + P.glifo + " " + P.nombre
                 : i === 1 ? "   $ " + guardado.oro
                 : "   " + guardado.personajes.length + "/" + PERSONAJES.length;
     texto(c0, f + i, (sel ? "▶ " : "  ") + (i + 1) + ". " + MENU_TITULO[i], sel ? C.blanco : C.claro);
@@ -1024,11 +1515,10 @@ function dibujarTitulo() {
   f += MENU_TITULO.length + 1;
 
   if (guardado.record > 0)
-    textoCentrado(f, "record: " + relojCorto(guardado.record) + "  ·  nivel " + guardado.mejorNivel, C.oro);
-  textoCentrado(f + 1, "↑↓ elegir  ·  ENTER aceptar  ·  las armas disparan solas", C.muro);
+    textoCentrado(f, T("record") + " " + relojCorto(guardado.record) + "  ·  " + T("level") + " " + guardado.mejorNivel, C.oro);
+  textoCentrado(f + 1, T("title_help") + "  ·  " + T("lang_tag"), C.muro);
 }
 
-/* Lista con cursor, comun a tienda y personajes. */
 function dibujarLista(f0, c0, ancho, filas, dibujarFila) {
   for (let i = 0; i < filas.length; i++) {
     const sel = i === menuSel, f = f0 + i * 2;
@@ -1042,10 +1532,10 @@ function dibujarTienda() {
   const w = Math.min(72, COLS - 4), h = Math.min(FILAS - 2, 8 + Object.keys(TIENDA).length * 2);
   const c0 = Math.floor((COLS - w) / 2), f0 = Math.max(0, Math.floor((FILAS - h) / 2));
   caja(c0, f0, w, h, C.oro, true);
-  texto(c0 + 3, f0 + 1, "T I E N D A", C.oro);
+  texto(c0 + 3, f0 + 1, T("shop_title"), C.oro);
   const bolsaTxt = "$ " + guardado.oro;
   texto(c0 + w - bolsaTxt.length - 3, f0 + 1, bolsaTxt, C.oro);
-  texto(c0 + 3, f0 + 2, "mejoras permanentes: valen para todas las partidas", C.gris);
+  texto(c0 + 3, f0 + 2, T("shop_subtitle"), C.gris);
 
   const ids = Object.keys(TIENDA);
   ultimaBaseMenu = f0 + 4;
@@ -1061,7 +1551,7 @@ function dibujarTienda() {
   });
 
   const pie = f0 + h - 2;
-  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : "ENTER comprar  ·  ESC volver  ·  el oro se gana matando",
+  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : T("shop_help"),
         avisoT > 0 ? avisoColor : C.muro);
 }
 
@@ -1069,47 +1559,47 @@ function dibujarPersonajes() {
   const w = Math.min(74, COLS - 4), h = Math.min(FILAS - 2, 8 + PERSONAJES.length * 2);
   const c0 = Math.floor((COLS - w) / 2), f0 = Math.max(0, Math.floor((FILAS - h) / 2));
   caja(c0, f0, w, h, C.morado, true);
-  texto(c0 + 3, f0 + 1, "P E R S O N A J E S", C.morado);
+  texto(c0 + 3, f0 + 1, T("chars_title"), C.morado);
   const bolsaTxt = "$ " + guardado.oro;
   texto(c0 + w - bolsaTxt.length - 3, f0 + 1, bolsaTxt, C.oro);
-  texto(c0 + 3, f0 + 2, "cada uno empieza con un arma distinta", C.gris);
+  texto(c0 + 3, f0 + 2, T("chars_subtitle"), C.gris);
 
   ultimaBaseMenu = f0 + 4;
   dibujarLista(f0 + 4, c0 + 2, w - 4, PERSONAJES, (P, f, sel) => {
     const tiene = guardado.personajes.includes(P.id);
     const activo = guardado.elegido === P.id;
     texto(c0 + 4, f, P.glifo + " " + P.nombre, activo ? C.oro : (tiene ? (sel ? C.blanco : C.claro) : C.muro));
-    texto(c0 + 18, f, recorta(tiene ? P.desc : "bloqueado", w - 50), tiene ? C.gris : C.muro);
+    texto(c0 + 18, f, recorta(tiene ? P.desc : T("chars_locked"), w - 50), tiene ? C.gris : C.muro);
     const arma = recorta(ARMAS[P.arma].glifo + " " + ARMAS[P.arma].nombre, 19);
     texto(c0 + w - 30, f, arma, tiene ? ARMAS[P.arma].color : C.muro);
-    texto(c0 + w - 9, f, activo ? " ACTIVO" : tiene ? "" : String(P.coste).padStart(5),
+    texto(c0 + w - 9, f, activo ? " " + T("chars_active") : tiene ? "" : String(P.coste).padStart(5),
           activo ? C.oro : (guardado.oro >= P.coste ? C.oro : C.muro));
   });
 
   const pie = f0 + h - 2;
-  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : "ENTER elegir o comprar  ·  ESC volver",
+  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : T("chars_help"),
         avisoT > 0 ? avisoColor : C.muro);
 }
 
-function avisar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.rojo; bip(140, 0.12, "square", 0.04); }
+function avisar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.rojo; SFX.hurt(); }
 function anunciar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.verde; }
 
 function dibujarFin() {
   const w = Math.min(52, COLS - 4), h = 12, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor((FILAS - h) / 2);
   caja(c0, f0, w, h, C.sangre, true);
-  textoCentrado(f0 + 2, "H A S   M U E R T O", C.rojo);
-  textoCentrado(f0 + 4, "tiempo sobrevivido: " + relojCorto(tiempo) +
-                (tiempo >= guardado.record ? "  ¡RECORD!" : ""), C.claro);
-  textoCentrado(f0 + 5, "enemigos eliminados: " + matados + "   ·   nivel " + J.nivel, C.claro);
-  textoCentrado(f0 + 7, "monedas: $ " + oroRun + "   ·   botin: $ " + botinRun +
-                "   ·   bolsa: $ " + guardado.oro, C.oro);
-  textoCentrado(f0 + 9, "[ ESPACIO reintentar ]   [ T tienda ]   [ ESC menu ]", C.claro);
+  textoCentrado(f0 + 2, T("died_title"), C.rojo);
+  textoCentrado(f0 + 4, T("time_survived") + relojCorto(tiempo) +
+                (tiempo >= guardado.record ? T("record_badge") : ""), C.claro);
+  textoCentrado(f0 + 5, T("enemies_slain") + matados + "   ·   " + T("level") + " " + J.nivel, C.claro);
+  textoCentrado(f0 + 7, T("coins") + "$ " + oroRun + "   ·   " + T("bounty") + "$ " + botinRun +
+                "   ·   " + T("pouch") + "$ " + guardado.oro, C.oro);
+  textoCentrado(f0 + 9, T("end_help"), C.claro);
 }
 
 function dibujarPausa() {
   const w = 30, h = 5, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor(FILAS / 2) - 2;
   caja(c0, f0, w, h, C.azul, true);
-  textoCentrado(f0 + 2, "P A U S A", C.claro);
+  textoCentrado(f0 + 2, T("pause_title"), C.claro);
 }
 
 /* ---------- Bucle principal (paso fijo) ----------------------------------- */
@@ -1129,7 +1619,7 @@ function cuadro(ahora) {
     if (acumulado > 0.5) acumulado = 0;
     alfa = acumulado / PASO;
   } else {
-    acumulado = 0;                 // al salir de un menu no se ejecutan pasos atrasados de golpe
+    acumulado = 0;
   }
 
   limpiar();
@@ -1150,107 +1640,114 @@ function cuadro(ahora) {
 /* ---------- Compras -------------------------------------------------------- */
 function comprarMejora(id) {
   const t = TIENDA[id], n = guardado.mejoras[id] || 0;
-  if (n >= t.max) { avisar(t.nombre + " ya esta al maximo."); return; }
+  if (n >= t.max) { avisar(t.nombre + T("shop_maxed")); return; }
   const coste = costeMejora(id);
-  if (guardado.oro < coste) { avisar("Te faltan " + (coste - guardado.oro) + " de oro."); return; }
+  if (guardado.oro < coste) { avisar(T("shop_need_gold", coste - guardado.oro)); return; }
   guardado.oro -= coste;
   guardado.mejoras[id] = n + 1;
   guardarProgreso();
-  anunciar(t.nombre + " sube a " + (n + 1) + ".");
-  bip(880, 0.1, "triangle", 0.05);
+  anunciar(t.nombre + T("shop_upgraded", n + 1));
+  SFX.uiOk();
 }
 
 function elegirPersonaje(P) {
   if (guardado.personajes.includes(P.id)) {
     guardado.elegido = P.id; guardarProgreso();
-    anunciar(P.nombre + " listo para la caza.");
-    bip(700, 0.09, "triangle", 0.05);
+    anunciar(P.nombre + T("char_ready"));
+    SFX.uiOk();
     return;
   }
-  if (guardado.oro < P.coste) { avisar("Te faltan " + (P.coste - guardado.oro) + " de oro."); return; }
+  if (guardado.oro < P.coste) { avisar(T("shop_need_gold", P.coste - guardado.oro)); return; }
   guardado.oro -= P.coste;
   guardado.personajes.push(P.id);
   guardado.elegido = P.id;
   guardarProgreso();
-  anunciar("¡" + P.nombre + " desbloqueado!");
-  bip(920, 0.14, "triangle", 0.06);
+  anunciar(T("char_unlocked", P.nombre));
+  SFX.reliquia();
 }
 
 function abrirDelTitulo() {
   if (menuSel === 0) { empezarPartida(); return; }
   estado = menuSel === 1 ? "tienda" : "personajes";
   menuSel = 0; avisoT = 0;
-  bip(520, 0.06, "triangle", 0.04);
+  SFX.uiSel();
 }
 
 function empezarPartida() {
   reiniciar();
   estado = "juego"; tiempo = 0; menuSel = 0; avisoT = 0;
-  bip(660, 0.08, "triangle", 0.05);
+  SFX.uiOk();
 }
 
 /* ---------- Manejo de teclas por estado ----------------------------------- */
 function manejarTecla(k) {
   if (k === "m") { silencio = !silencio; return; }
+  if (k === "n") { musicaActiva = !musicaActiva; return; }
+  if (k === "l") { alternarIdioma(); return; }
+
   const arriba  = k === "arrowup"   || k === "w";
   const abajo   = k === "arrowdown" || k === "s";
   const aceptar = k === "enter" || k === " " || k === "spacebar";
 
   if (estado === "titulo") {
-    if (arriba)  menuSel = (menuSel + MENU_TITULO.length - 1) % MENU_TITULO.length;
-    else if (abajo) menuSel = (menuSel + 1) % MENU_TITULO.length;
+    if (arriba)  { menuSel = (menuSel + MENU_TITULO.length - 1) % MENU_TITULO.length; SFX.uiSel(); }
+    else if (abajo) { menuSel = (menuSel + 1) % MENU_TITULO.length; SFX.uiSel(); }
     else if (k === "1" || k === "2" || k === "3") { menuSel = +k - 1; abrirDelTitulo(); }
     else if (aceptar) abrirDelTitulo();
     return;
   }
   if (estado === "tienda") {
     const ids = Object.keys(TIENDA);
-    if (arriba)  menuSel = (menuSel + ids.length - 1) % ids.length;
-    else if (abajo) menuSel = (menuSel + 1) % ids.length;
+    if (arriba)  { menuSel = (menuSel + ids.length - 1) % ids.length; SFX.uiSel(); }
+    else if (abajo) { menuSel = (menuSel + 1) % ids.length; SFX.uiSel(); }
     else if (aceptar) comprarMejora(ids[menuSel]);
-    else if (k === "escape" || k === "t") { estado = "titulo"; menuSel = 1; avisoT = 0; }
+    else if (k === "escape" || k === "t") { estado = "titulo"; menuSel = 1; avisoT = 0; SFX.uiSel(); }
     return;
   }
   if (estado === "personajes") {
-    if (arriba)  menuSel = (menuSel + PERSONAJES.length - 1) % PERSONAJES.length;
-    else if (abajo) menuSel = (menuSel + 1) % PERSONAJES.length;
+    if (arriba)  { menuSel = (menuSel + PERSONAJES.length - 1) % PERSONAJES.length; SFX.uiSel(); }
+    else if (abajo) { menuSel = (menuSel + 1) % PERSONAJES.length; SFX.uiSel(); }
     else if (aceptar) elegirPersonaje(PERSONAJES[menuSel]);
-    else if (k === "escape" || k === "c") { estado = "titulo"; menuSel = 2; avisoT = 0; }
+    else if (k === "escape" || k === "c") { estado = "titulo"; menuSel = 2; avisoT = 0; SFX.uiSel(); }
     return;
   }
   if (estado === "fin") {
     if (aceptar) empezarPartida();
-    else if (k === "t") { estado = "tienda"; menuSel = 0; }
-    else if (k === "escape") { estado = "titulo"; menuSel = 0; }
+    else if (k === "t") { estado = "tienda"; menuSel = 0; SFX.uiSel(); }
+    else if (k === "escape") { estado = "titulo"; menuSel = 0; SFX.uiSel(); }
     return;
   }
   if (estado === "nivel") {
     if (k === "1") aplicarOpcion(opciones[0]);
     else if (k === "2" && opciones[1]) aplicarOpcion(opciones[1]);
     else if (k === "3" && opciones[2]) aplicarOpcion(opciones[2]);
-    else if (k === "arrowup" || k === "w") seleccion = (seleccion + opciones.length - 1) % opciones.length;
-    else if (k === "arrowdown" || k === "s") seleccion = (seleccion + 1) % opciones.length;
+    else if (k === "arrowup" || k === "w") { seleccion = (seleccion + opciones.length - 1) % opciones.length; SFX.uiSel(); }
+    else if (k === "arrowdown" || k === "s") { seleccion = (seleccion + 1) % opciones.length; SFX.uiSel(); }
     else if (k === "enter" || k === " " || k === "spacebar") aplicarOpcion(opciones[seleccion]);
     return;
   }
-  if (k === "p" || k === "escape") estado = estado === "pausa" ? "juego" : "pausa";
+  if (k === "p" || k === "escape") {
+    estado = estado === "pausa" ? "juego" : "pausa";
+    SFX.uiSel();
+  }
 }
 
-/* Raton y tactil: menus con toque directo, y arrastrar para moverse */
+/* Raton y tactil */
 let puntero = null;
 cv.addEventListener("pointerdown", ev => {
+  obtenerAudio();
+  if (!musicInterval) iniciarMusica();
   cv.focus();
   const r = cv.getBoundingClientRect();
   const f = Math.floor((ev.clientY - r.top) / celdaH);
 
-  // En los menus de lista, tocar una fila la selecciona; volver a tocarla, la activa.
   if (estado === "titulo" || estado === "tienda" || estado === "personajes") {
     const filas = estado === "titulo" ? MENU_TITULO.length
                 : estado === "tienda" ? Object.keys(TIENDA).length : PERSONAJES.length;
     const base = ultimaBaseMenu, paso = estado === "titulo" ? 1 : 2;
     const i = Math.floor((f - base) / paso);
     if (i >= 0 && i < filas && (f - base) % paso === 0) {
-      if (menuSel === i) manejarTecla("enter"); else menuSel = i;
+      if (menuSel === i) manejarTecla("enter"); else { menuSel = i; SFX.uiSel(); }
     }
     return;
   }
@@ -1265,7 +1762,7 @@ cv.addEventListener("pointerdown", ev => {
   }
   if (estado === "juego") {
     puntero = { x: ev.clientX, y: ev.clientY };
-    try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* sin captura tambien se juega */ }
+    try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
   }
 });
 cv.addEventListener("pointermove", ev => { if (puntero) puntero = { x: ev.clientX, y: ev.clientY }; });

@@ -1,0 +1,17 @@
+{
+  "name": "VAMPIRE ASSCII",
+  "short_name": "VampireAsscii",
+  "description": "Sobrevive a una horda de vampiros dibujada con caracteres.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0c0f16",
+  "theme_color": "#0c0f16",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./screenshots/menu.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}

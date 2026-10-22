@@ -1,0 +1,17 @@
+{
+  "name": "vampire-asscii",
+  "version": "1.0.0",
+  "description": "Vampire ASSCII - Roguelite de supervivencia en modo texto",
+  "type": "module",
+  "bin": {
+    "vampire-asscii": "./vampire-cli.mjs"
+  },
+  "scripts": {
+    "start": "node ./vampire-cli.mjs",
+    "cli": "node ./vampire-cli.mjs",
+    "webapp": "./lanzar-webapp.sh"
+  },
+  "keywords": ["ascii", "game", "tui", "roguelite", "cli"],
+  "author": "",
+  "license": "MIT"
+}

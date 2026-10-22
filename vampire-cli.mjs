@@ -1,0 +1,1426 @@
+#!/usr/bin/env node
+"use strict";
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import readline from "node:readline";
+
+/* ==========================================================================
+   VAMPIRE ASSCII — Versión Terminal (TUI)
+   Superviviente de hordas en modo texto para ejecutar en la consola.
+   ========================================================================== */
+
+/* ---------- Internacionalización (i18n) ----------------------------------- */
+const I18N = {
+  es: {
+    menu_play: "JUGAR",
+    menu_shop: "TIENDA",
+    menu_chars: "PERSONAJES",
+    subtitle: "sobrevive a la horda escrita en caracteres",
+    legend: "z v S w O Ω la horda  ·  * gemas  ·  $ oro  ·  ♥ vida",
+    with: "con",
+    record: "record:",
+    level: "nivel",
+    title_help: "↑↓ elegir  ·  ENTER aceptar  ·  las armas disparan solas",
+    shop_title: "T I E N D A",
+    shop_subtitle: "mejoras permanentes: valen para todas las partidas",
+    shop_help: "ENTER comprar  ·  ESC volver  ·  el oro se gana matando",
+    chars_title: "P E R S O N A J E S",
+    chars_subtitle: "cada uno empieza con un arma distinta",
+    chars_help: "ENTER elegir o comprar  ·  ESC volver",
+    chars_locked: "bloqueado",
+    chars_active: "ACTIVO",
+    pause_title: "P A U S A",
+    died_title: "H A S   M U E R T O",
+    time_survived: "tiempo sobrevivido: ",
+    record_badge: "  ¡RECORD!",
+    enemies_slain: "enemigos eliminados: ",
+    coins: "monedas: ",
+    bounty: "botin: ",
+    pouch: "bolsa: ",
+    end_help: "[ ESPACIO reintentar ]   [ T tienda ]   [ ESC menu ]",
+    lvlup_title: "-=  ¡NIVEL %d!  =-",
+    lvlup_choose: "elige una mejora  (1 / 2 / 3)",
+    lvlup_new: "¡NUEVO!",
+    lvlup_help: "↑↓ mover  ·  Enter aceptar",
+    wave_alert: "¡OLEADA!",
+    boss_alert: "¡¡JEFE!!",
+    relic_alert: "¡RELIQUIA!",
+    feast_name: "Festin",
+    feast_desc: "Recupera 40 de vida",
+    upg_to_level: "Sube a nivel ",
+    hud_hp: "VIDA",
+    hud_xp: "EXP ",
+    hud_lv: "Nv.",
+    hud_weapons: "ARM:",
+    hud_items: "OBJ:",
+    hud_boss: "Ω JEFE",
+    hud_help: "WASD/flechas  P pausa  L idioma  Q salir",
+    shop_maxed: " ya esta al maximo.",
+    shop_need_gold: "Te faltan %d de oro.",
+    shop_upgraded: " sube a %d.",
+    char_ready: " listo para la caza.",
+    char_unlocked: "¡%s desbloqueado!",
+    lang_tag: "[ L: ES ]",
+    // Armas
+    w_daga_name: "Daga arrojadiza", w_daga_desc: "Lanza dagas al enemigo mas cercano.",
+    w_latigo_name: "Latigo", w_latigo_desc: "Golpea en abanico a los lados, alternando.",
+    w_ajo_name: "Aura de ajo", w_ajo_desc: "Dana sin parar a lo que te rodea y lo empuja.",
+    w_orbitas_name: "Cruces orbitales", w_orbitas_desc: "Cruces que giran a tu alrededor.",
+    w_rayo_name: "Rayo", w_rayo_desc: "Cae sobre enemigos al azar.",
+    w_biblia_name: "Biblia maldita", w_biblia_desc: "Libros que orbitan lejos y atraviesan todo.",
+    // Pasivas
+    p_botas_name: "Botas aladas", p_botas_desc: "+12% velocidad",
+    p_corazon_name: "Corazon", p_corazon_desc: "+20 vida max y cura",
+    p_furia_name: "Furia", p_furia_desc: "+15% dano",
+    p_reloj_name: "Reloj roto", p_reloj_desc: "-12% enfriamiento",
+    p_esfera_name: "Esfera", p_esfera_desc: "+20% area",
+    p_iman_name: "Iman", p_iman_desc: "+40% radio de recogida",
+    p_armadura_name: "Armadura", p_armadura_desc: "-1 dano recibido",
+    p_vendas_name: "Vendas", p_vendas_desc: "+0.4 vida/seg",
+    // Tienda
+    t_vigor_name: "Vigor", t_vigor_desc: "+12% vida maxima",
+    t_fuerza_name: "Fuerza", t_fuerza_desc: "+8% dano",
+    t_prisa_name: "Prisa", t_prisa_desc: "+5% velocidad",
+    t_pulso_name: "Pulso", t_pulso_desc: "-5% enfriamiento",
+    t_magnetita_name: "Magnetita", t_magnetita_desc: "+20% radio de recogida",
+    t_codicia_name: "Codicia", t_codicia_desc: "+25% oro que sueltan",
+    t_coraza_name: "Coraza", t_coraza_desc: "-1 dano recibido",
+    t_reliquia_name: "Reliquia", t_reliquia_desc: "revives una vez",
+    // Personajes
+    c_aldeano_name: "Aldeano", c_aldeano_desc: "Equilibrado. La escuela clasica.",
+    c_cazadora_name: "Cazadora", c_cazadora_desc: "Veloz y fragil. Golpea a los lados.",
+    c_monje_name: "Monje", c_monje_desc: "Lento, pero su aura es enorme.",
+    c_sepulturero_name: "Sepulturero", c_sepulturero_desc: "Duro como una lapida.",
+    c_alquimista_name: "Alquimista", c_alquimista_desc: "Pega como un tren, aguanta como un vaso.",
+    c_hereje_name: "Hereje", c_hereje_desc: "Cadencia infernal y buen iman."
+  },
+  en: {
+    menu_play: "PLAY",
+    menu_shop: "SHOP",
+    menu_chars: "CHARACTERS",
+    subtitle: "survive the character-rendered horde",
+    legend: "z v S w O Ω the horde  ·  * gems  ·  $ gold  ·  ♥ health",
+    with: "with",
+    record: "record:",
+    level: "level",
+    title_help: "↑↓ choose  ·  ENTER accept  ·  weapons auto-fire",
+    shop_title: "S H O P",
+    shop_subtitle: "permanent upgrades: persist across all runs",
+    shop_help: "ENTER buy  ·  ESC back  ·  gold is earned by slaying",
+    chars_title: "C H A R A C T E R S",
+    chars_subtitle: "each character starts with a unique weapon",
+    chars_help: "ENTER select or buy  ·  ESC back",
+    chars_locked: "locked",
+    chars_active: "ACTIVE",
+    pause_title: "P A U S E D",
+    died_title: "Y O U   D I E D",
+    time_survived: "survival time: ",
+    record_badge: "  NEW RECORD!",
+    enemies_slain: "enemies slain: ",
+    coins: "coins: ",
+    bounty: "bounty: ",
+    pouch: "pouch: ",
+    end_help: "[ SPACE retry ]   [ T shop ]   [ ESC menu ]",
+    lvlup_title: "-=  LEVEL %d!  =-",
+    lvlup_choose: "choose an upgrade  (1 / 2 / 3)",
+    lvlup_new: "NEW!",
+    lvlup_help: "↑↓ move  ·  Enter accept",
+    wave_alert: "WAVE!",
+    boss_alert: "BOSS!!",
+    relic_alert: "RELIC!",
+    feast_name: "Feast",
+    feast_desc: "Restores 40 health",
+    upg_to_level: "Upgrade to lvl ",
+    hud_hp: "HP  ",
+    hud_xp: "EXP ",
+    hud_lv: "Lv.",
+    hud_weapons: "WEAP:",
+    hud_items: "ITEM:",
+    hud_boss: "Ω BOSS",
+    hud_help: "WASD/arrows  P pause  L lang  Q quit",
+    shop_maxed: " is already at max level.",
+    shop_need_gold: "You need %d more gold.",
+    shop_upgraded: " upgraded to %d.",
+    char_ready: " ready for the hunt.",
+    char_unlocked: "%s unlocked!",
+    lang_tag: "[ L: EN ]",
+    // Weapons
+    w_daga_name: "Throwing Dagger", w_daga_desc: "Throws daggers at the nearest enemy.",
+    w_latigo_name: "Whip", w_latigo_desc: "Whips enemies on alternating sides.",
+    w_ajo_name: "Garlic Aura", w_ajo_desc: "Damages and pushes surrounding enemies.",
+    w_orbitas_name: "Orbiting Crosses", w_orbitas_desc: "Crosses rotating around you.",
+    w_rayo_name: "Lightning Bolt", w_rayo_desc: "Strikes random enemies from above.",
+    w_biblia_name: "Cursed Bible", w_biblia_desc: "Books orbiting further that pierce everything.",
+    // Passives
+    p_botas_name: "Winged Boots", p_botas_desc: "+12% speed",
+    p_corazon_name: "Heart", p_corazon_desc: "+20 max HP and heal",
+    p_furia_name: "Fury", p_furia_desc: "+15% damage",
+    p_reloj_name: "Broken Clock", p_reloj_desc: "-12% cooldown",
+    p_esfera_name: "Sphere", p_esfera_desc: "+20% area",
+    p_iman_name: "Magnet", p_iman_desc: "+40% pickup radius",
+    p_armadura_name: "Armor", p_armadura_desc: "-1 damage taken",
+    p_vendas_name: "Bandages", p_vendas_desc: "+0.4 HP/sec",
+    // Shop
+    t_vigor_name: "Vigor", t_vigor_desc: "+12% max health",
+    t_fuerza_name: "Might", t_fuerza_desc: "+8% damage",
+    t_prisa_name: "Haste", t_prisa_desc: "+5% speed",
+    t_pulso_name: "Pulse", t_pulso_desc: "-5% cooldown",
+    t_magnetita_name: "Magnetite", t_magnetita_desc: "+20% pickup radius",
+    t_codicia_name: "Greed", t_codicia_desc: "+25% gold drops",
+    t_coraza_name: "Carapace", t_coraza_desc: "-1 damage taken",
+    t_reliquia_name: "Relic", t_reliquia_desc: "revive once",
+    // Characters
+    c_aldeano_name: "Villager", c_aldeano_desc: "Balanced. The classic style.",
+    c_cazadora_name: "Huntress", c_cazadora_desc: "Fast and fragile. Strikes the flanks.",
+    c_monje_name: "Monk", c_monje_desc: "Slow, but with a massive aura.",
+    c_sepulturero_name: "Gravedigger", c_sepulturero_desc: "Tough as a tombstone.",
+    c_alquimista_name: "Alchemist", c_alquimista_desc: "Hits like a train, fragile as glass.",
+    c_hereje_name: "Heretic", c_hereje_desc: "Infernal fire rate and great magnet."
+  }
+};
+
+function detectarIdiomaSO() {
+  const env = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || "";
+  return env.toLowerCase().startsWith("es") ? "es" : "en";
+}
+
+function idiomaActual() {
+  if (guardado && (guardado.idioma === "es" || guardado.idioma === "en")) return guardado.idioma;
+  return detectarIdiomaSO();
+}
+
+function T(k, ...args) {
+  const lang = idiomaActual();
+  let str = (I18N[lang] && I18N[lang][k]) || I18N.es[k] || k;
+  if (args.length) {
+    args.forEach(a => { str = str.replace(/%[ds]/, a); });
+  }
+  return str;
+}
+
+let MENU_TITULO = ["JUGAR", "TIENDA", "PERSONAJES"];
+function actualizarMenuTitulos() {
+  MENU_TITULO[0] = T("menu_play");
+  MENU_TITULO[1] = T("menu_shop");
+  MENU_TITULO[2] = T("menu_chars");
+}
+
+function alternarIdioma() {
+  const actual = idiomaActual();
+  guardado.idioma = actual === "es" ? "en" : "es";
+  guardarProgreso();
+  actualizarMenuTitulos();
+}
+
+/* ---------- Paleta ANSI 24-bit TrueColor ---------------------------------- */
+const PAL = [
+  [12, 15, 22],    // 0 fondo
+  [29, 37, 54],    // 1 fondo2
+  [51, 65, 92],    // 2 muro
+  [107, 122, 153], // 3 gris
+  [200, 210, 228], // 4 claro
+  [255, 255, 255], // 5 blanco
+  [139, 28, 43],   // 6 sangre
+  [224, 58, 74],   // 7 rojo
+  [255, 131, 96],  // 8 naranja
+  [255, 209, 102], // 9 oro
+  [123, 216, 143], // 10 verde
+  [63, 185, 138],  // 11 verde2
+  [89, 194, 255],  // 12 azul
+  [160, 107, 255], // 13 morado
+  [255, 110, 199], // 14 rosa
+  [90, 58, 42]     // 15 marron
+];
+
+const C = {
+  fondo: 0, fondo2: 1, muro: 2, gris: 3, claro: 4, blanco: 5,
+  sangre: 6, rojo: 7, naranja: 8, oro: 9, verde: 10, verde2: 11,
+  azul: 12, morado: 13, rosa: 14, marron: 15
+};
+
+const ANSI_FG = PAL.map(([r, g, b]) => `\x1b[38;2;${r};${g};${b}m`);
+const ANSI_BG = PAL.map(([r, g, b]) => `\x1b[48;2;${r};${g};${b}m`);
+
+/* ---------- Dimensiones y Búferes ----------------------------------------- */
+let COLS = 80, FILAS = 24, ASPECTO = 2;
+let COLSM = 0, FILASM = 0;
+let bufM = null, colM = null, zM = null;
+let bufU = null, colU = null, zU = null, fondoU = null;
+let capa = 0;
+
+function redimensionar() {
+  COLS = Math.max(40, process.stdout.columns || 80);
+  FILAS = Math.max(16, process.stdout.rows || 24);
+  ASPECTO = 2.0;
+  COLSM = COLS + 2;
+  FILASM = FILAS + 2;
+
+  bufM = new Array(COLSM * FILASM).fill(" ");
+  colM = new Array(COLSM * FILASM).fill(0);
+  zM = new Int8Array(COLSM * FILASM);
+
+  bufU = new Array(COLS * FILAS).fill(" ");
+  colU = new Array(COLS * FILAS).fill(0);
+  zU = new Int8Array(COLS * FILAS);
+  fondoU = new Int8Array(COLS * FILAS);
+}
+
+function limpiar() {
+  bufM.fill(" "); colM.fill(0); zM.fill(-100);
+  bufU.fill(" "); colU.fill(0); zU.fill(-100); fondoU.fill(0);
+  capa = 0;
+}
+
+function pon(c, f, ch, color, z) {
+  if (capa) {
+    if (c < 0 || f < 0 || c >= COLS || f >= FILAS) return;
+    const i = f * COLS + c;
+    if ((z | 0) < zU[i]) return;
+    bufU[i] = ch; colU[i] = color; zU[i] = z | 0;
+  } else {
+    if (c < 0 || f < 0 || c >= COLSM || f >= FILASM) return;
+    const i = f * COLSM + c;
+    if ((z | 0) < zM[i]) return;
+    bufM[i] = ch; colM[i] = color; zM[i] = z | 0;
+  }
+}
+
+function fondoUI(c, f, color) {
+  if (c < 0 || f < 0 || c >= COLS || f >= FILAS) return;
+  fondoU[f * COLS + c] = color + 1;
+}
+
+function texto(c, f, s, color, z) {
+  for (let i = 0; i < s.length; i++) pon(c + i, f, s[i], color, z === undefined ? 60 : z);
+}
+
+function textoCentrado(f, s, color, z) {
+  texto(Math.floor((COLS - s.length) / 2), f, s, color, z);
+}
+
+function caja(c, f, w, h, color, relleno) {
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const borde = (y === 0 || y === h - 1 || x === 0 || x === w - 1);
+      if (relleno) fondoUI(c + x, f + y, C.fondo);
+      if (!borde) continue;
+      let ch = (y === 0 || y === h - 1) ? "─" : "│";
+      if (y === 0 && x === 0) ch = "┌";
+      else if (y === 0 && x === w - 1) ch = "┐";
+      else if (y === h - 1 && x === 0) ch = "└";
+      else if (y === h - 1 && x === w - 1) ch = "┘";
+      pon(c + x, f + y, ch, color, 55);
+    }
+  }
+}
+
+/* ---------- Utilidades ---------------------------------------------------- */
+const rnd = (a, b) => a + Math.random() * (b - a);
+const rndi = (a, b) => Math.floor(rnd(a, b + 1));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function elegir(a) { return a[rndi(0, a.length - 1)]; }
+
+let silencio = false;
+function bip() {
+  if (!silencio) process.stdout.write("\x07");
+}
+
+/* ---------- Persistencia Local -------------------------------------------- */
+const RUTA_GUARDADO = path.join(os.homedir(), ".vampire-asscii.json");
+let guardado = { oro: 0, mejoras: {}, personajes: ["aldeano"], elegido: "aldeano", record: 0, mejorNivel: 1, idioma: "auto" };
+
+function cargarProgreso() {
+  try {
+    if (fs.existsSync(RUTA_GUARDADO)) {
+      const s = fs.readFileSync(RUTA_GUARDADO, "utf-8");
+      if (s) Object.assign(guardado, JSON.parse(s));
+    }
+  } catch (e) {}
+  actualizarMenuTitulos();
+}
+function guardarProgreso() {
+  try {
+    fs.writeFileSync(RUTA_GUARDADO, JSON.stringify(guardado, null, 2), "utf-8");
+  } catch (e) {}
+}
+
+/* ---------- Definiciones de Armas y Pasivas ------------------------------- */
+const ARMAS = {
+  daga: {
+    get nombre() { return T("w_daga_name"); },
+    get desc() { return T("w_daga_desc"); },
+    glifo: "→", color: C.claro,
+    cd: n => 0.62 - 0.05 * (n - 1),
+    disparar(J, n) {
+      const cant = 1 + Math.floor(n / 2);
+      const dmg = 11 + 4.5 * (n - 1);
+      const obj = enemigoMasCercano(J.x, J.y, 42);
+      let ang = obj ? Math.atan2(obj.y - J.y, obj.x - J.x) : J.mira;
+      for (let i = 0; i < cant; i++) {
+        const a = ang + (i - (cant - 1) / 2) * 0.13;
+        nuevoProyectil(J.x, J.y, Math.cos(a) * 46, Math.sin(a) * 46, dmg * J.poder, 1 + Math.floor(n / 3), 1.6, glifoDir(a), C.claro);
+      }
+    }
+  },
+  latigo: {
+    get nombre() { return T("w_latigo_name"); },
+    get desc() { return T("w_latigo_desc"); },
+    glifo: "≡", color: C.oro,
+    cd: n => 1.1 - 0.07 * (n - 1),
+    disparar(J, n) {
+      const dmg = 14 + 7 * (n - 1);
+      const alcance = (13 + 1.6 * (n - 1)) * J.area;
+      const lados = n >= 3 ? [1, -1] : [J.latigoLado = -(J.latigoLado || -1)];
+      for (const s of lados) {
+        const cx = J.x + s * alcance * 0.5;
+        golpeArea(cx, J.y, alcance * 0.55, dmg * J.poder, 6);
+        for (let i = 0; i < 9; i++) {
+          efectos.push({ x: J.x + s * (2 + i * (alcance / 10)), y: J.y + rnd(-2.2, 2.2),
+                         vida: 0.16, t: 0.16, ch: "=", color: C.oro });
+        }
+      }
+    }
+  },
+  ajo: {
+    get nombre() { return T("w_ajo_name"); },
+    get desc() { return T("w_ajo_desc"); },
+    glifo: "o", color: C.verde,
+    cd: n => 0.5,
+    disparar(J, n) {
+      const r = (7 + 1.5 * n) * J.area;
+      const dmg = (3 + 1.6 * (n - 1)) * J.poder;
+      for (const e of enemigosCerca(J.x, J.y, r)) {
+        danarEnemigo(e, dmg, 0.35);
+        const d = Math.hypot(e.x - J.x, e.y - J.y) || 1;
+        e.x += (e.x - J.x) / d * 0.6; e.y += (e.y - J.y) / d * 0.6;
+      }
+      J.auraR = r; J.auraT = 0.5;
+    }
+  },
+  orbitas: {
+    get nombre() { return T("w_orbitas_name"); },
+    get desc() { return T("w_orbitas_desc"); },
+    glifo: "+", color: C.azul,
+    cd: n => 0.18,
+    disparar(J, n) {
+      const cant = 2 + Math.floor((n - 1) / 1.5);
+      const r = (9 + 0.9 * n) * J.area;
+      const dmg = (6 + 3 * (n - 1)) * J.poder;
+      J.orb = { cant, r, dmg };
+    }
+  },
+  rayo: {
+    get nombre() { return T("w_rayo_name"); },
+    get desc() { return T("w_rayo_desc"); },
+    glifo: "¡", color: C.morado,
+    cd: n => 2.4 - 0.18 * (n - 1),
+    disparar(J, n) {
+      const golpes = 1 + Math.floor(n / 2);
+      const dmg = (26 + 12 * (n - 1)) * J.poder;
+      const cand = enemigosCerca(J.x, J.y, 70);
+      if (!cand.length) return;
+      for (let i = 0; i < golpes; i++) {
+        const e = elegir(cand);
+        golpeArea(e.x, e.y, 5 * J.area, dmg, 5);
+        for (let k = 0; k < 7; k++)
+          efectos.push({ x: e.x + rnd(-1, 1), y: e.y - k * 2.2, vida: 0.22, t: 0.22, ch: k % 2 ? "\\" : "/", color: C.morado });
+      }
+    }
+  },
+  biblia: {
+    get nombre() { return T("w_biblia_name"); },
+    get desc() { return T("w_biblia_desc"); },
+    glifo: "§", color: C.rosa,
+    cd: n => 4.0 - 0.25 * (n - 1),
+    disparar(J, n) {
+      const cant = 1 + Math.floor(n / 2);
+      for (let i = 0; i < cant; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const p = nuevoProyectil(J.x, J.y, 0, 0, (10 + 5 * (n - 1)) * J.poder, 999, 3.2, "§", C.rosa);
+        p.orbita = { a, r: 0, rMax: (16 + n) * J.area, vel: 3.4 };
+      }
+    }
+  }
+};
+
+const PASIVAS = {
+  botas:   { get nombre() { return T("p_botas_name"); },   get desc() { return T("p_botas_desc"); },   max: 5, glifo: "»", color: C.verde2, aplicar: J => J.velBase *= 1.12 },
+  corazon: { get nombre() { return T("p_corazon_name"); }, get desc() { return T("p_corazon_desc"); }, max: 5, glifo: "♥", color: C.rojo,   aplicar: J => { J.vidaMax += 20; J.vida = Math.min(J.vidaMax, J.vida + 20); } },
+  furia:   { get nombre() { return T("p_furia_name"); },   get desc() { return T("p_furia_desc"); },   max: 5, glifo: "↑", color: C.naranja,aplicar: J => J.poder *= 1.15 },
+  reloj:   { get nombre() { return T("p_reloj_name"); },   get desc() { return T("p_reloj_desc"); },   max: 5, glifo: "°", color: C.azul,   aplicar: J => J.cd *= 0.88 },
+  esfera:  { get nombre() { return T("p_esfera_name"); },  get desc() { return T("p_esfera_desc"); },  max: 5, glifo: "()",color: C.morado, aplicar: J => J.area *= 1.20 },
+  iman:    { get nombre() { return T("p_iman_name"); },    get desc() { return T("p_iman_desc"); },    max: 5, glifo: "U", color: C.oro,    aplicar: J => J.iman *= 1.40 },
+  armadura:{ get nombre() { return T("p_armadura_name"); },get desc() { return T("p_armadura_desc"); },max: 5, glifo: "#", color: C.gris,   aplicar: J => J.armadura += 1 },
+  vendas:  { get nombre() { return T("p_vendas_name"); },  get desc() { return T("p_vendas_desc"); },  max: 4, glifo: "+", color: C.verde,  aplicar: J => J.regen += 0.4 }
+};
+
+const TIENDA = {
+  vigor:    { get nombre() { return T("t_vigor_name"); },    get desc() { return T("t_vigor_desc"); },    max: 5, coste: 60,  inc: 45, glifo: "♥" },
+  fuerza:   { get nombre() { return T("t_fuerza_name"); },   get desc() { return T("t_fuerza_desc"); },   max: 5, coste: 80,  inc: 65, glifo: "↑" },
+  prisa:    { get nombre() { return T("t_prisa_name"); },    get desc() { return T("t_prisa_desc"); },    max: 4, coste: 70,  inc: 55, glifo: "»" },
+  pulso:    { get nombre() { return T("t_pulso_name"); },    get desc() { return T("t_pulso_desc"); },    max: 4, coste: 90,  inc: 70, glifo: "°" },
+  magnetita:{ get nombre() { return T("t_magnetita_name"); },get desc() { return T("t_magnetita_desc"); },max: 3, coste: 70,  inc: 60, glifo: "U" },
+  codicia:  { get nombre() { return T("t_codicia_name"); },  get desc() { return T("t_codicia_desc"); },  max: 4, coste: 100, inc: 80, glifo: "$" },
+  coraza:   { get nombre() { return T("t_coraza_name"); },   get desc() { return T("t_coraza_desc"); },   max: 3, coste: 120, inc: 100,glifo: "#" },
+  reliquia: { get nombre() { return T("t_reliquia_name"); }, get desc() { return T("t_reliquia_desc"); }, max: 1, coste: 500, inc: 0,  glifo: "✝" }
+};
+const costeMejora = (id) => TIENDA[id].coste + TIENDA[id].inc * (guardado.mejoras[id] || 0);
+
+const PERSONAJES = [
+  { id:"aldeano",     glifo:"@", get nombre() { return T("c_aldeano_name"); },     arma:"daga",
+    get desc() { return T("c_aldeano_desc"); },        coste:0,   vida:100, vel:14.5, poder:1,    area:1,   cd:1,    armadura:0 },
+  { id:"cazadora",    glifo:"Y", get nombre() { return T("c_cazadora_name"); },    arma:"latigo",
+    get desc() { return T("c_cazadora_desc"); },       coste:150, vida:80,  vel:17.0, poder:1,    area:1.1, cd:1,    armadura:0 },
+  { id:"monje",       glifo:"&", get nombre() { return T("c_monje_name"); },       arma:"ajo",
+    get desc() { return T("c_monje_desc"); },          coste:250, vida:130, vel:12.5, poder:0.9,  area:1.4, cd:1,    armadura:0 },
+  { id:"sepulturero", glifo:"#", get nombre() { return T("c_sepulturero_name"); }, arma:"orbitas",
+    get desc() { return T("c_sepulturero_desc"); },    coste:400, vida:170, vel:12.0, poder:1,    area:1.15,cd:1.05, armadura:2 },
+  { id:"alquimista",  glifo:"%", get nombre() { return T("c_alquimista_name"); },  arma:"rayo",
+    get desc() { return T("c_alquimista_desc"); },     coste:550, vida:70,  vel:14.5, poder:1.3,  area:1,   cd:1,    armadura:0 },
+  { id:"hereje",      glifo:"!", get nombre() { return T("c_hereje_name"); },      arma:"biblia",
+    get desc() { return T("c_hereje_desc"); },         coste:700, vida:90,  vel:14.5, poder:1,    area:1,   cd:0.82, armadura:0 }
+];
+const personajePorId = id => PERSONAJES.find(p => p.id === id) || PERSONAJES[0];
+
+const TIPOS = [
+  { id:"z", ch:"z", nombre:"zombi",     color:C.verde2, vida:14,  vel:7.4,  dmg:6,  xp:1, desde:0   },
+  { id:"v", ch:"v", nombre:"murcielago",color:C.morado, vida:8,   vel:12.5, dmg:4,  xp:1, desde:35  },
+  { id:"S", ch:"S", nombre:"esqueleto", color:C.claro,  vida:34,  vel:8.4,  dmg:9,  xp:2, desde:80  },
+  { id:"w", ch:"w", nombre:"lobo",      color:C.gris,   vida:26,  vel:13.6, dmg:8,  xp:2, desde:150 },
+  { id:"O", ch:"O", nombre:"ogro",      color:C.sangre, vida:120, vel:6.0,  dmg:16, xp:6, desde:210 },
+  { id:"W", ch:"W", nombre:"espectro",  color:C.azul,   vida:70,  vel:10.2, dmg:12, xp:5, desde:300 }
+];
+
+/* ---------- Estado -------------------------------------------------------- */
+let J, enemigos, proyectiles, gemas, curas, monedas, efectos, flotantes;
+let tiempo, matados, oleada, proxSpawn, cam, estado, opciones, seleccion, jefeProx, sacudida;
+let oroRun = 0, botinRun = 0, menuSel = 0, avisoTienda = "", avisoT = 0, avisoColor = 0, ultimaBaseMenu = 0;
+
+function nuevoJugador() {
+  const P = personajePorId(guardado.elegido);
+  const m = guardado.mejoras;
+  const niv = id => m[id] || 0;
+
+  const J = {
+    x: 0, y: 0, xPrev: 0, yPrev: 0, glifo: P.glifo, personaje: P.id, mira: 0,
+    vida: 100, vidaMax: 100, velBase: P.vel, nivel: 1, xp: 0, xpProx: 4, pendientes: 0,
+    poder: P.poder, cd: P.cd, area: P.area, iman: 1, codicia: 1, revivir: 0,
+    armadura: P.armadura, regen: 0, invul: 0, auraR: 0, auraT: 0, orb: null, orbA: 0,
+    armas: {}, pasivas: {}, temporiz: {}
+  };
+  J.armas[P.arma] = 1;
+  J.temporiz[P.arma] = 0;
+
+  J.vidaMax  = Math.round(P.vida * (1 + 0.12 * niv("vigor")));
+  J.vida     = J.vidaMax;
+  J.poder   *= 1 + 0.08 * niv("fuerza");
+  J.velBase *= 1 + 0.05 * niv("prisa");
+  J.cd      *= 1 - 0.05 * niv("pulso");
+  J.iman    *= 1 + 0.20 * niv("magnetita");
+  J.codicia += 0.25 * niv("codicia");
+  J.armadura += niv("coraza");
+  J.revivir  = niv("reliquia");
+  return J;
+}
+
+function reiniciar() {
+  actualizarMenuTitulos();
+  J = nuevoJugador();
+  enemigos = []; proyectiles = []; gemas = []; curas = []; monedas = []; efectos = []; flotantes = [];
+  oroRun = 0; botinRun = 0;
+  tiempo = 0; matados = 0; oleada = 0; proxSpawn = 0; jefeProx = 60; sacudida = 0;
+  cam = { x: 0, y: 0 };
+  estado = "titulo"; opciones = null; seleccion = 0;
+}
+
+/* ---------- Rejilla espacial para enemigos -------------------------------- */
+const CELDA_HASH = 6;
+let hashMap = new Map();
+function reconstruirHash() {
+  hashMap.clear();
+  for (const e of enemigos) {
+    const k = (Math.floor(e.x / CELDA_HASH) * 73856093) ^ (Math.floor(e.y / CELDA_HASH) * 19349663);
+    let a = hashMap.get(k); if (!a) hashMap.set(k, a = []);
+    a.push(e);
+  }
+}
+function enemigosCerca(x, y, r) {
+  const res = [], r2 = r * r, c0 = Math.floor((x - r) / CELDA_HASH), c1 = Math.floor((x + r) / CELDA_HASH);
+  const f0 = Math.floor((y - r) / CELDA_HASH), f1 = Math.floor((y + r) / CELDA_HASH);
+  for (let c = c0; c <= c1; c++) for (let f = f0; f <= f1; f++) {
+    const a = hashMap.get((c * 73856093) ^ (f * 19349663));
+    if (!a) continue;
+    for (const e of a) { const dx = e.x - x, dy = e.y - y; if (dx * dx + dy * dy <= r2) res.push(e); }
+  }
+  return res;
+}
+function enemigoMasCercano(x, y, rmax) {
+  let mejor = null, md = rmax * rmax;
+  for (const e of enemigos) { const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy; if (d < md) { md = d; mejor = e; } }
+  return mejor;
+}
+
+/* ---------- Fabricas ------------------------------------------------------ */
+function glifoDir(a) {
+  const g = ["→","\\","|","/","←","\\","|","/"];
+  return g[(Math.round(a / (Math.PI / 4)) + 8) % 8];
+}
+function nuevoProyectil(x, y, vx, vy, dmg, pierce, vida, ch, color) {
+  const p = { x, y, vx, vy, dmg, pierce, vida, ch, color, golpeados: new Set(), orbita: null };
+  proyectiles.push(p); return p;
+}
+function golpeArea(x, y, r, dmg, sacude) {
+  for (const e of enemigosCerca(x, y, r)) danarEnemigo(e, dmg, 0.1);
+  sacudida = Math.max(sacudida, sacude || 0);
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2;
+    efectos.push({ x: x + Math.cos(a) * r * 0.7, y: y + Math.sin(a) * r * 0.7, vida: 0.18, t: 0.18, ch: "*", color: C.naranja });
+  }
+}
+function danarEnemigo(e, dmg, parpadeo) {
+  if (e.vida <= 0) return;
+  e.vida -= dmg; e.flash = parpadeo || 0.08;
+  if (flotantes.length < 16 && (e.jefe || dmg >= 30 || Math.random() < 0.12))
+    flotantes.push({ x: e.x, y: e.y, t: 0.5, vida: 0.5, txt: String(Math.round(dmg)), color: dmg > 25 ? C.naranja : C.claro });
+  if (e.vida <= 0) matarEnemigo(e);
+}
+function matarEnemigo(e) {
+  matados++;
+  gemas.push({ x: e.x, y: e.y, xp: e.xp, vx: rnd(-6, 6), vy: rnd(-6, 6), t: 0 });
+  if (e.jefe || (e.tipo.vida >= 70 && Math.random() < 0.12)) curas.push({ x: e.x, y: e.y, t: 0 });
+  const monto = e.jefe ? rndi(30, 50) : (Math.random() < 0.18 ? rndi(2, 5) : 0);
+  if (monto > 0) monedas.push({ x: e.x, y: e.y, oro: Math.max(1, Math.round(monto * J.codicia)), t: 0 });
+  for (let i = 0; i < 3; i++)
+    efectos.push({ x: e.x + rnd(-1.5, 1.5), y: e.y + rnd(-1.5, 1.5), vida: 0.25, t: 0.25, ch: elegir(["·","'",","]), color: C.sangre });
+}
+
+/* ---------- Aparicion de enemigos ----------------------------------------- */
+function factorDificultad() { return 1 + tiempo / 140 + Math.pow(tiempo / 260, 2); }
+
+function puntoBorde(margen) {
+  const hw = COLS / 2 + (margen || 3), hh = (FILAS * ASPECTO) / 2 + (margen || 3);
+  const t = Math.random();
+  switch (rndi(0, 3)) {
+    case 0: return { x: J.x - hw + t * hw * 2, y: J.y - hh };
+    case 1: return { x: J.x - hw + t * hw * 2, y: J.y + hh };
+    case 2: return { x: J.x - hw, y: J.y - hh + t * hh * 2 };
+    default:return { x: J.x + hw, y: J.y - hh + t * hh * 2 };
+  }
+}
+
+function aparecerEnemigo(tipo, margen) {
+  const p = puntoBorde(margen);
+  const f = factorDificultad();
+  return {
+    x: p.x, y: p.y,
+    ch: tipo.ch, color: tipo.color, tipo,
+    vida: tipo.vida * f, vidaMax: tipo.vida * f,
+    vel: tipo.vel * (1 + Math.min(0.5, tiempo / 600)) * rnd(0.9, 1.1),
+    dmg: tipo.dmg * (1 + tiempo / 300), xp: tipo.xp, flash: 0, empuje: 0, tgolpe: 0, jefe: false
+  };
+}
+
+function directorSpawn(dt) {
+  proxSpawn -= dt;
+  const ritmo = clamp(0.95 - tiempo / 320, 0.11, 0.95);
+  const tope  = Math.min(380, 70 + tiempo * 1.1);
+  if (proxSpawn <= 0 && enemigos.length < tope) {
+    proxSpawn = ritmo;
+    const disp = TIPOS.filter(t => tiempo >= t.desde);
+    const cant = 1 + Math.floor(tiempo / 90);
+    for (let i = 0; i < cant; i++) enemigos.push(aparecerEnemigo(elegir(disp)));
+  }
+  if (tiempo > oleada * 30 && tiempo > 20) {
+    oleada++;
+    const t = elegir(TIPOS.filter(x => tiempo >= x.desde));
+    const n = 10 + oleada * 3, rx = COLS / 2 + 4, ry = (FILAS * ASPECTO) / 2 + 4;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, e = aparecerEnemigo(t);
+      e.x = J.x + Math.cos(a) * rx; e.y = J.y + Math.sin(a) * ry;
+      enemigos.push(e);
+    }
+    flotantes.push({ x: J.x, y: J.y - 8, t: 1.6, vida: 1.6, txt: T("wave_alert"), color: C.rojo });
+  }
+  if (tiempo >= jefeProx) {
+    jefeProx += 60;
+    const base = TIPOS[TIPOS.length - 1], e = aparecerEnemigo(base, 5);
+    e.jefe = true; e.ch = "Ω"; e.color = C.rojo;
+    e.vida = e.vidaMax = base.vida * factorDificultad() * 14;
+    e.vel = 5.2; e.dmg *= 1.6; e.xp = 60;
+    enemigos.push(e);
+    flotantes.push({ x: J.x, y: J.y - 10, t: 2.2, vida: 2.2, txt: T("boss_alert"), color: C.rojo });
+  }
+}
+
+function terminarPartida() {
+  estado = "fin";
+  botinRun = Math.floor(tiempo / 8) + J.nivel * 3;
+  guardado.oro += oroRun + botinRun;
+  if (tiempo > guardado.record) guardado.record = tiempo;
+  if (J.nivel > guardado.mejorNivel) guardado.mejorNivel = J.nivel;
+  guardarProgreso();
+}
+
+function generarOpciones() {
+  const pool = [];
+  for (const id in ARMAS) {
+    const n = J.armas[id] || 0;
+    if (n === 0 && Object.keys(J.armas).length >= 5) continue;
+    if (n >= 8) continue;
+    pool.push({ tipo: "arma", id, nivel: n + 1,
+      nombre: ARMAS[id].nombre, desc: n === 0 ? ARMAS[id].desc : T("upg_to_level") + (n + 1),
+      glifo: ARMAS[id].glifo, color: ARMAS[id].color, peso: n === 0 ? 3 : 4 });
+  }
+  for (const id in PASIVAS) {
+    const n = J.pasivas[id] || 0;
+    if (n >= PASIVAS[id].max) continue;
+    pool.push({ tipo: "pasiva", id, nivel: n + 1, nombre: PASIVAS[id].nombre,
+      desc: PASIVAS[id].desc, glifo: PASIVAS[id].glifo, color: PASIVAS[id].color, peso: 3 });
+  }
+  const sel = [];
+  let bolsa = [];
+  for (const o of pool) for (let i = 0; i < o.peso; i++) bolsa.push(o);
+  while (sel.length < 3 && bolsa.length) {
+    const o = elegir(bolsa);
+    sel.push(o);
+    bolsa = bolsa.filter(x => !(x.tipo === o.tipo && x.id === o.id));
+  }
+  if (!sel.length) sel.push({ tipo: "cura", id: "cura", nombre: T("feast_name"), desc: T("feast_desc"), glifo: "♥", color: C.rojo });
+  return sel;
+}
+
+function aplicarOpcion(o) {
+  if (o.tipo === "arma") {
+    J.armas[o.id] = (J.armas[o.id] || 0) + 1;
+    if (J.temporiz[o.id] === undefined) J.temporiz[o.id] = 0;
+  } else if (o.tipo === "pasiva") {
+    J.pasivas[o.id] = (J.pasivas[o.id] || 0) + 1;
+    PASIVAS[o.id].aplicar(J);
+  } else {
+    J.vida = Math.min(J.vidaMax, J.vida + 40);
+  }
+  J.pendientes = Math.max(0, J.pendientes - 1);
+  estado = "juego"; opciones = null;
+}
+
+function subirNivel() {
+  J.nivel++;
+  J.xp -= J.xpProx;
+  J.xpProx = Math.round(J.xpProx * 1.25 + 2);
+  J.pendientes++;
+}
+function abrirMenuPendiente() {
+  if (J.pendientes <= 0 || estado !== "juego") return;
+  opciones = generarOpciones(); seleccion = 0; estado = "nivel";
+}
+
+/* ---------- Actualización (Física) ---------------------------------------- */
+const PASO = 1 / 60;
+const teclas = Object.create(null);
+
+function actualizar(dt) {
+  tiempo += dt;
+  J.xPrev = J.x; J.yPrev = J.y;
+  if (sacudida > 0) sacudida = Math.max(0, sacudida - dt * 22);
+
+  let mx = 0, my = 0;
+  if (teclas["a"] || teclas["left"])  mx -= 1;
+  if (teclas["d"] || teclas["right"]) mx += 1;
+  if (teclas["w"] || teclas["up"])    my -= 1;
+  if (teclas["s"] || teclas["down"])  my += 1;
+
+  if (mx || my) {
+    const l = Math.hypot(mx, my);
+    J.x += (mx / l) * J.velBase * dt;
+    J.y += (my / l) * J.velBase * dt;
+    J.mira = Math.atan2(my, mx);
+  }
+  if (J.regen) J.vida = Math.min(J.vidaMax, J.vida + J.regen * dt);
+  if (J.invul > 0) J.invul -= dt;
+  if (J.auraT > 0) J.auraT -= dt;
+
+  reconstruirHash();
+
+  /* Armas */
+  for (const id in J.armas) {
+    const n = J.armas[id], A = ARMAS[id];
+    J.temporiz[id] = (J.temporiz[id] || 0) - dt;
+    if (J.temporiz[id] <= 0) {
+      J.temporiz[id] = Math.max(0.05, A.cd(n) * J.cd);
+      A.disparar(J, n);
+    }
+  }
+
+  /* Cruces orbitales */
+  if (J.orb) {
+    J.orbA += dt * 2.6;
+    for (let i = 0; i < J.orb.cant; i++) {
+      const a = J.orbA + (i / J.orb.cant) * Math.PI * 2;
+      const ox = J.x + Math.cos(a) * J.orb.r, oy = J.y + Math.sin(a) * J.orb.r;
+      for (const e of enemigosCerca(ox, oy, 2.4)) {
+        if (e.tgolpe > tiempo) continue;
+        e.tgolpe = tiempo + 0.25;
+        danarEnemigo(e, J.orb.dmg, 0.1);
+      }
+    }
+  }
+
+  /* Enemigos */
+  for (let i = enemigos.length - 1; i >= 0; i--) {
+    const e = enemigos[i];
+    if (e.vida <= 0) { enemigos.splice(i, 1); continue; }
+    if (e.flash > 0) e.flash -= dt;
+    const dx = J.x - e.x, dy = J.y - e.y, d = Math.hypot(dx, dy) || 1;
+    if (!e.jefe && d > COLS * 1.6) { enemigos.splice(i, 1); continue; }
+    e.x += (dx / d) * e.vel * dt;
+    e.y += (dy / d) * e.vel * dt;
+    const vec = enemigosCerca(e.x, e.y, 1.7);
+    for (const o of vec) {
+      if (o === e) continue;
+      const ox = e.x - o.x, oy = e.y - o.y, od = Math.hypot(ox, oy) || 0.001;
+      if (od < 1.7) { e.x += (ox / od) * 8 * dt; e.y += (oy / od) * 8 * dt; }
+    }
+    if (d < 1.6 && J.invul <= 0) {
+      const dano = Math.max(1, e.dmg - J.armadura);
+      J.vida -= dano; J.invul = 0.7; sacudida = Math.max(sacudida, 4);
+      flotantes.push({ x: J.x, y: J.y - 2, t: 0.6, vida: 0.6, txt: "-" + Math.round(dano), color: C.rojo });
+      if (J.vida <= 0) {
+        if (J.revivir > 0) {
+          J.revivir--;
+          J.vida = J.vidaMax; J.invul = 3; sacudida = 12;
+          golpeArea(J.x, J.y, 26 * J.area, 9999, 10);
+          flotantes.push({ x: J.x, y: J.y - 4, t: 2, vida: 2, txt: T("relic_alert"), color: C.oro });
+        } else {
+          terminarPartida();
+        }
+      }
+    }
+  }
+
+  /* Proyectiles */
+  for (let i = proyectiles.length - 1; i >= 0; i--) {
+    const p = proyectiles[i];
+    p.vida -= dt;
+    if (p.orbita) {
+      p.orbita.r = Math.min(p.orbita.rMax, p.orbita.r + dt * 26);
+      p.orbita.a += dt * p.orbita.vel;
+      p.x = J.x + Math.cos(p.orbita.a) * p.orbita.r;
+      p.y = J.y + Math.sin(p.orbita.a) * p.orbita.r;
+    } else {
+      p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+    if (p.vida <= 0) { proyectiles.splice(i, 1); continue; }
+    for (const e of enemigosCerca(p.x, p.y, 1.9)) {
+      if (p.golpeados.has(e)) continue;
+      p.golpeados.add(e);
+      danarEnemigo(e, p.dmg, 0.1);
+      if (--p.pierce <= 0) { proyectiles.splice(i, 1); break; }
+    }
+  }
+
+  /* Gemas */
+  const radio = 11 * J.iman;
+  for (let i = gemas.length - 1; i >= 0; i--) {
+    const g = gemas[i];
+    g.t += dt;
+    const dx = J.x - g.x, dy = J.y - g.y, d = Math.hypot(dx, dy) || 1;
+    if (g.t > 7) g.atraida = true;
+    if (d < radio || g.atraida) {
+      g.atraida = true;
+      const v = Math.max(24, 30 + (radio - d) * 4);
+      g.x += (dx / d) * v * dt; g.y += (dy / d) * v * dt;
+    } else {
+      g.x += g.vx * dt; g.y += g.vy * dt;
+      g.vx *= 0.9; g.vy *= 0.9;
+    }
+    if (d < 1.4) {
+      gemas.splice(i, 1);
+      J.xp += g.xp;
+      while (J.xp >= J.xpProx) subirNivel();
+    }
+  }
+
+  /* Curas */
+  for (let i = curas.length - 1; i >= 0; i--) {
+    const c = curas[i];
+    c.t += dt;
+    if (c.t > 25) { curas.splice(i, 1); continue; }
+    const cdx = J.x - c.x, cdy = J.y - c.y, cd = Math.hypot(cdx, cdy) || 1;
+    if (cd < 8 * J.iman) { c.x += (cdx / cd) * 22 * dt; c.y += (cdy / cd) * 22 * dt; }
+    if (cd < 2.2) {
+      curas.splice(i, 1);
+      J.vida = Math.min(J.vidaMax, J.vida + 30);
+      flotantes.push({ x: J.x, y: J.y - 2, t: 0.9, vida: 0.9, txt: "+30", color: C.verde });
+    }
+  }
+
+  /* Monedas */
+  for (let i = monedas.length - 1; i >= 0; i--) {
+    const m = monedas[i];
+    m.t += dt;
+    if (m.t > 25) { monedas.splice(i, 1); continue; }
+    const mdx = J.x - m.x, mdy = J.y - m.y, md = Math.hypot(mdx, mdy) || 1;
+    if (md < 11 * J.iman) { m.x += (mdx / md) * 26 * dt; m.y += (mdy / md) * 26 * dt; }
+    if (md < 1.6) {
+      monedas.splice(i, 1);
+      oroRun += m.oro;
+    }
+  }
+
+  for (let i = efectos.length - 1; i >= 0; i--) { const f = efectos[i]; f.t -= dt; if (f.t <= 0) efectos.splice(i, 1); }
+  for (let i = flotantes.length - 1; i >= 0; i--) { const f = flotantes[i]; f.t -= dt; f.y -= dt * 5; if (f.t <= 0) flotantes.splice(i, 1); }
+
+  directorSpawn(dt);
+  abrirMenuPendiente();
+}
+
+/* ---------- Dibujo del Mundo y HUD ---------------------------------------- */
+let baseCol = 0, baseFila = 0;
+
+function situarCamara() {
+  cam.x = J.x - COLS / 2;
+  cam.y = J.y - (FILAS * ASPECTO) / 2;
+  baseCol = Math.floor(cam.x);
+  baseFila = Math.floor(cam.y / ASPECTO);
+}
+function aCol(x) { return Math.floor(x) - baseCol + 1; }
+function aFila(y) { return Math.floor(y / ASPECTO) - baseFila + 1; }
+
+function dibujarFondo() {
+  for (let f = 0; f < FILASM; f++) {
+    for (let c = 0; c < COLSM; c++) {
+      const h = hash2(baseCol - 1 + c, baseFila - 1 + f);
+      if (h > 0.955)      pon(c, f, "♣", C.fondo2, -1);
+      else if (h > 0.90)  pon(c, f, "\"", C.fondo2, -1);
+      else if (h > 0.84)  pon(c, f, ".",  C.fondo2, -1);
+      else if (h > 0.822) pon(c, f, "·",  C.muro,   -1);
+    }
+  }
+}
+
+function dibujarMundo() {
+  situarCamara();
+  dibujarFondo();
+
+  if (J.auraT > 0 && J.auraR > 0) {
+    const pasos = Math.max(16, Math.floor(J.auraR * 2));
+    for (let i = 0; i < pasos; i++) {
+      const a = (i / pasos) * Math.PI * 2;
+      pon(aCol(J.x + Math.cos(a) * J.auraR), aFila(J.y + Math.sin(a) * J.auraR), "o", C.verde2, 1);
+    }
+  }
+
+  for (const g of gemas) {
+    const ch = g.xp >= 20 ? "♦" : g.xp >= 5 ? "◆" : "*";
+    const col = g.xp >= 20 ? C.oro : g.xp >= 5 ? C.rosa : C.azul;
+    pon(aCol(g.x), aFila(g.y), ch, col, 2);
+  }
+
+  for (const c of curas) {
+    if (c.t < 20 || Math.floor(c.t * 6) % 2)
+      pon(aCol(c.x), aFila(c.y), "♥", C.rojo, 4);
+  }
+
+  for (const m of monedas) {
+    pon(aCol(m.x), aFila(m.y), "$", C.oro, 3);
+  }
+
+  for (const f of efectos) pon(aCol(f.x), aFila(f.y), f.ch, f.color, 5);
+
+  const pila = new Map();
+  for (const e of enemigos) {
+    const c = aCol(e.x), f = aFila(e.y);
+    if (c < 0 || f < 0 || c >= COLSM || f >= FILASM) continue;
+    const k = f * COLSM + c;
+    pila.set(k, (pila.get(k) || 0) + 1);
+    const color = e.flash > 0 ? C.blanco : e.color;
+    pon(c, f, e.ch, color, e.jefe ? 8 : 6);
+  }
+  for (const [k, n] of pila) {
+    if (n < 3) continue;
+    const c = k % COLSM, f = (k / COLSM) | 0;
+    if (zM[k] <= 6) pon(c, f, n > 9 ? "▓" : "▒", C.sangre, 7);
+  }
+
+  for (const p of proyectiles) pon(aCol(p.x), aFila(p.y), p.ch, p.color, 9);
+
+  if (J.orb) {
+    for (let i = 0; i < J.orb.cant; i++) {
+      const a = J.orbA + (i / J.orb.cant) * Math.PI * 2;
+      pon(aCol(J.x + Math.cos(a) * J.orb.r), aFila(J.y + Math.sin(a) * J.orb.r), "+", C.azul, 9);
+    }
+  }
+
+  const parpadeo = J.invul > 0 && Math.floor(J.invul * 20) % 2 === 0;
+  pon(aCol(J.x), aFila(J.y), J.glifo, parpadeo ? C.rojo : C.blanco, 50);
+
+  for (const f of flotantes) texto(aCol(f.x) - Math.floor(f.txt.length / 2), aFila(f.y), f.txt, f.color, 40);
+
+  for (const e of enemigos) {
+    if (!e.jefe) continue;
+    const c = aCol(e.x), f = aFila(e.y);
+    if (c >= 1 && f >= 1 && c <= COLS && f <= FILAS - 3) continue;
+    pon(clamp(c, 1, COLS), clamp(f, 1, FILAS - 3), "¡", C.rojo, 45);
+  }
+}
+
+function barra(c, f, ancho, frac, chLleno, colLleno, colVacio) {
+  const n = Math.round(clamp(frac, 0, 1) * ancho);
+  for (let i = 0; i < ancho; i++) pon(c + i, f, i < n ? chLleno : "·", i < n ? colLleno : colVacio, 60);
+}
+
+function dibujarHUD() {
+  const f0 = FILAS - 3;
+  for (let f = f0 - 1; f < FILAS; f++) for (let c = 0; c < COLS; c++) fondoUI(c, f, C.fondo);
+  for (let c = 0; c < COLS; c++) pon(c, f0 - 1, "─", C.muro, 58);
+
+  const min = Math.floor(tiempo / 60), seg = Math.floor(tiempo % 60);
+  const reloj = (min < 10 ? "0" : "") + min + ":" + (seg < 10 ? "0" : "") + seg;
+
+  texto(1, f0, T("hud_hp"), C.gris);
+  barra(6, f0, 18, J.vida / J.vidaMax, "█", J.vida / J.vidaMax > 0.3 ? C.rojo : C.sangre, C.fondo2);
+  texto(25, f0, Math.max(0, Math.ceil(J.vida)) + "/" + J.vidaMax, C.claro);
+
+  texto(1, f0 + 1, T("hud_xp"), C.gris);
+  barra(6, f0 + 1, 18, J.xp / J.xpProx, "█", C.azul, C.fondo2);
+  texto(25, f0 + 1, T("hud_lv") + J.nivel, C.oro);
+
+  texto(33, f0, "⏱ " + reloj, C.claro);
+  texto(33, f0 + 1, "☠ " + matados, C.sangre);
+  texto(42, f0, "$ " + oroRun, C.oro);
+
+  let c = 48;
+  texto(c, f0, T("hud_weapons"), C.gris); c += 6;
+  for (const id in J.armas) { texto(c, f0, ARMAS[id].glifo + String(J.armas[id]), ARMAS[id].color); c += 3; }
+  let c2 = 48;
+  texto(c2, f0 + 1, T("hud_items"), C.gris); c2 += 6;
+  for (const id in J.pasivas) { texto(c2, f0 + 1, PASIVAS[id].glifo[0] + String(J.pasivas[id]), PASIVAS[id].color); c2 += 3; }
+
+  const ayuda = T("hud_help");
+  if (COLS > 85) texto(COLS - ayuda.length - 1, f0 + 1, ayuda, C.fondo2);
+
+  let jefe = null;
+  for (const e of enemigos) if (e.jefe && (!jefe || e.vida > jefe.vida)) jefe = e;
+  if (jefe) {
+    const ancho = Math.min(40, COLS - 20);
+    const c3 = Math.floor((COLS - ancho) / 2);
+    texto(c3 - 8, 1, T("hud_boss"), C.rojo);
+    barra(c3, 1, ancho, jefe.vida / jefe.vidaMax, "█", C.sangre, C.fondo2);
+  }
+}
+
+function dibujarMenuNivel() {
+  const w = Math.min(64, COLS - 4), h = 16, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor((FILAS - h) / 2) - 1;
+  caja(c0, f0, w, h, C.oro, true);
+  textoCentrado(f0 + 1, T("lvlup_title", J.nivel), C.oro);
+  textoCentrado(f0 + 2, T("lvlup_choose"), C.gris);
+  for (let i = 0; i < opciones.length; i++) {
+    const o = opciones[i], f = f0 + 4 + i * 3, sel = i === seleccion;
+    if (sel) for (let x = 1; x < w - 1; x++) pon(c0 + x, f, " ", C.fondo2, 57);
+    texto(c0 + 3, f, (sel ? "▶ " : "  ") + (i + 1) + ". " + o.glifo + " " + o.nombre +
+          (o.nivel > 1 ? "  Nv." + o.nivel : "  " + T("lvlup_new")), sel ? C.blanco : o.color, 60);
+    texto(c0 + 8, f + 1, o.desc, C.gris, 60);
+  }
+  textoCentrado(f0 + h - 2, T("lvlup_help"), C.muro);
+}
+
+const FUENTE_BLOQUE = {
+  V:["#   #","#   #","#   #"," # # ","  #  "],
+  A:[" ### ","#   #","#####","#   #","#   #"],
+  M:["#   #","## ##","# # #","#   #","#   #"],
+  P:["#### ","#   #","#### ","#    ","#    "],
+  I:["#####","  #  ","  #  ","  #  ","#####"],
+  R:["#### ","#   #","#### ","#  # ","#   #"],
+  E:["#####","#    ","#### ","#    ","#####"],
+  S:[" ####","#    "," ### ","    #","#### "],
+  C:[" ####","#    ","#    ","#    "," ####"],
+  " ":["     ","     ","     ","     ","     "]
+};
+function rotulo(f0, palabra, color) {
+  const letras = palabra.split("").map(ch => FUENTE_BLOQUE[ch] || FUENTE_BLOQUE[" "]);
+  const ancho = letras.length * 6 - 1;
+  const c0 = Math.floor((COLS - ancho) / 2);
+  for (let fila = 0; fila < 5; fila++) {
+    for (let i = 0; i < letras.length; i++) {
+      const patron = letras[i][fila];
+      for (let x = 0; x < patron.length; x++)
+        if (patron[x] === "#") pon(c0 + i * 6 + x, f0 + fila, "█", color, 60);
+    }
+  }
+  return ancho;
+}
+
+function relojCorto(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return m + "m " + (s < 10 ? "0" : "") + s + "s";
+}
+function recorta(s, n) { return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s; }
+function bolsa(n, max) {
+  let s = "";
+  for (let i = 0; i < max; i++) s += i < n ? "●" : "○";
+  return s;
+}
+
+function dibujarTitulo() {
+  const compacto = FILAS < 28;
+  const f0 = Math.max(0, Math.floor((FILAS - (compacto ? 18 : 21)) / 2));
+  rotulo(f0, "VAMPIRE", C.sangre);
+  rotulo(f0 + 6, "ASSCII", C.rojo);
+
+  let f = f0 + 12;
+  textoCentrado(f++, T("subtitle"), C.gris);
+  if (!compacto) textoCentrado(f++, T("legend"), C.muro);
+  f++;
+
+  const P = personajePorId(guardado.elegido);
+  const c0 = Math.max(0, Math.floor(COLS / 2) - 16);
+  ultimaBaseMenu = f;
+  for (let i = 0; i < MENU_TITULO.length; i++) {
+    const sel = i === menuSel;
+    const extra = i === 0 ? "   " + T("with") + " " + P.glifo + " " + P.nombre
+                : i === 1 ? "   $ " + guardado.oro
+                : "   " + guardado.personajes.length + "/" + PERSONAJES.length;
+    texto(c0, f + i, (sel ? "▶ " : "  ") + (i + 1) + ". " + MENU_TITULO[i], sel ? C.blanco : C.claro);
+    texto(c0 + 16, f + i, extra, sel ? C.oro : C.muro);
+  }
+  f += MENU_TITULO.length + 1;
+
+  if (guardado.record > 0)
+    textoCentrado(f, T("record") + " " + relojCorto(guardado.record) + "  ·  " + T("level") + " " + guardado.mejorNivel, C.oro);
+  textoCentrado(f + 1, T("title_help") + "  ·  " + T("lang_tag"), C.muro);
+}
+
+function dibujarLista(f0, c0, ancho, filas, dibujarFila) {
+  for (let i = 0; i < filas.length; i++) {
+    const sel = i === menuSel, f = f0 + i * 2;
+    if (sel) for (let x = 0; x < ancho; x++) fondoUI(c0 + x, f, C.fondo2);
+    texto(c0, f, sel ? "▶" : " ", C.oro);
+    dibujarFila(filas[i], f, sel);
+  }
+}
+
+function dibujarTienda() {
+  const w = Math.min(72, COLS - 4), h = Math.min(FILAS - 2, 8 + Object.keys(TIENDA).length * 2);
+  const c0 = Math.floor((COLS - w) / 2), f0 = Math.max(0, Math.floor((FILAS - h) / 2));
+  caja(c0, f0, w, h, C.oro, true);
+  texto(c0 + 3, f0 + 1, T("shop_title"), C.oro);
+  const bolsaTxt = "$ " + guardado.oro;
+  texto(c0 + w - bolsaTxt.length - 3, f0 + 1, bolsaTxt, C.oro);
+  texto(c0 + 3, f0 + 2, T("shop_subtitle"), C.gris);
+
+  const ids = Object.keys(TIENDA);
+  ultimaBaseMenu = f0 + 4;
+  dibujarLista(f0 + 4, c0 + 2, w - 4, ids, (id, f, sel) => {
+    const t = TIENDA[id], n = guardado.mejoras[id] || 0, tope = n >= t.max;
+    const coste = costeMejora(id);
+    const puede = !tope && guardado.oro >= coste;
+    texto(c0 + 4, f, t.glifo + " " + t.nombre, sel ? C.blanco : (tope ? C.verde : C.claro));
+    texto(c0 + 18, f, recorta(t.desc, w - 38), C.gris);
+    texto(c0 + w - 18, f, bolsa(n, t.max), tope ? C.verde : C.azul);
+    texto(c0 + w - 9, f, tope ? "  MAX" : String(coste).padStart(5),
+          tope ? C.verde : (puede ? C.oro : C.muro));
+  });
+
+  const pie = f0 + h - 2;
+  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : T("shop_help"),
+        avisoT > 0 ? avisoColor : C.muro);
+}
+
+function dibujarPersonajes() {
+  const w = Math.min(74, COLS - 4), h = Math.min(FILAS - 2, 8 + PERSONAJES.length * 2);
+  const c0 = Math.floor((COLS - w) / 2), f0 = Math.max(0, Math.floor((FILAS - h) / 2));
+  caja(c0, f0, w, h, C.morado, true);
+  texto(c0 + 3, f0 + 1, T("chars_title"), C.morado);
+  const bolsaTxt = "$ " + guardado.oro;
+  texto(c0 + w - bolsaTxt.length - 3, f0 + 1, bolsaTxt, C.oro);
+  texto(c0 + 3, f0 + 2, T("chars_subtitle"), C.gris);
+
+  ultimaBaseMenu = f0 + 4;
+  dibujarLista(f0 + 4, c0 + 2, w - 4, PERSONAJES, (P, f, sel) => {
+    const tiene = guardado.personajes.includes(P.id);
+    const activo = guardado.elegido === P.id;
+    texto(c0 + 4, f, P.glifo + " " + P.nombre, activo ? C.oro : (tiene ? (sel ? C.blanco : C.claro) : C.muro));
+    texto(c0 + 18, f, recorta(tiene ? P.desc : T("chars_locked"), w - 50), tiene ? C.gris : C.muro);
+    const arma = recorta(ARMAS[P.arma].glifo + " " + ARMAS[P.arma].nombre, 19);
+    texto(c0 + w - 30, f, arma, tiene ? ARMAS[P.arma].color : C.muro);
+    texto(c0 + w - 9, f, activo ? " " + T("chars_active") : tiene ? "" : String(P.coste).padStart(5),
+          activo ? C.oro : (guardado.oro >= P.coste ? C.oro : C.muro));
+  });
+
+  const pie = f0 + h - 2;
+  texto(c0 + 3, pie, avisoT > 0 ? avisoTienda : T("chars_help"),
+        avisoT > 0 ? avisoColor : C.muro);
+}
+
+function avisar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.rojo; }
+function anunciar(txt) { avisoTienda = txt; avisoT = 2.2; avisoColor = C.verde; }
+
+function dibujarFin() {
+  const w = Math.min(52, COLS - 4), h = 12, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor((FILAS - h) / 2);
+  caja(c0, f0, w, h, C.sangre, true);
+  textoCentrado(f0 + 2, T("died_title"), C.rojo);
+  textoCentrado(f0 + 4, T("time_survived") + relojCorto(tiempo) +
+                (tiempo >= guardado.record ? T("record_badge") : ""), C.claro);
+  textoCentrado(f0 + 5, T("enemies_slain") + matados + "   ·   " + T("level") + " " + J.nivel, C.claro);
+  textoCentrado(f0 + 7, T("coins") + "$ " + oroRun + "   ·   " + T("bounty") + "$ " + botinRun +
+                "   ·   " + T("pouch") + "$ " + guardado.oro, C.oro);
+  textoCentrado(f0 + 9, T("end_help"), C.claro);
+}
+
+function dibujarPausa() {
+  const w = 30, h = 5, c0 = Math.floor((COLS - w) / 2), f0 = Math.floor(FILAS / 2) - 2;
+  caja(c0, f0, w, h, C.azul, true);
+  textoCentrado(f0 + 2, T("pause_title"), C.claro);
+}
+
+/* ---------- Renderizado ANSI a Terminal ----------------------------------- */
+function renderizarTerminal() {
+  let out = "\x1b[H";
+  let curFg = -1;
+  let curBg = -1;
+
+  for (let f = 0; f < FILAS; f++) {
+    for (let c = 0; c < COLS; c++) {
+      const iU = f * COLS + c;
+      const chU = bufU[iU];
+      const clU = colU[iU];
+      const bgU = fondoU[iU];
+
+      const iM = (f + 1) * COLSM + (c + 1);
+      const chM = bufM[iM];
+      const clM = colM[iM];
+
+      let ch = " ", fg = C.claro, bg = C.fondo;
+
+      if (bgU > 0) {
+        bg = bgU - 1;
+        if (chU !== " ") { ch = chU; fg = clU; }
+      } else {
+        if (chU !== " ") {
+          ch = chU; fg = clU;
+        } else if (chM !== " ") {
+          ch = chM; fg = clM;
+        }
+      }
+
+      if (fg !== curFg) {
+        out += ANSI_FG[fg] || ANSI_FG[C.claro];
+        curFg = fg;
+      }
+      if (bg !== curBg) {
+        out += ANSI_BG[bg] || ANSI_BG[C.fondo];
+        curBg = bg;
+      }
+      out += ch;
+    }
+    if (f < FILAS - 1) out += "\n";
+  }
+
+  process.stdout.write(out);
+}
+
+/* ---------- Compras y Navegación ----------------------------------------- */
+function comprarMejora(id) {
+  const t = TIENDA[id], n = guardado.mejoras[id] || 0;
+  if (n >= t.max) { avisar(t.nombre + T("shop_maxed")); return; }
+  const coste = costeMejora(id);
+  if (guardado.oro < coste) { avisar(T("shop_need_gold", coste - guardado.oro)); return; }
+  guardado.oro -= coste;
+  guardado.mejoras[id] = n + 1;
+  guardarProgreso();
+  anunciar(t.nombre + T("shop_upgraded", n + 1));
+}
+
+function elegirPersonaje(P) {
+  if (guardado.personajes.includes(P.id)) {
+    guardado.elegido = P.id; guardarProgreso();
+    anunciar(P.nombre + T("char_ready"));
+    return;
+  }
+  if (guardado.oro < P.coste) { avisar(T("shop_need_gold", P.coste - guardado.oro)); return; }
+  guardado.oro -= P.coste;
+  guardado.personajes.push(P.id);
+  guardado.elegido = P.id;
+  guardarProgreso();
+  anunciar(T("char_unlocked", P.nombre));
+}
+
+function abrirDelTitulo() {
+  if (menuSel === 0) { empezarPartida(); return; }
+  estado = menuSel === 1 ? "tienda" : "personajes";
+  menuSel = 0; avisoT = 0;
+}
+
+function empezarPartida() {
+  reiniciar();
+  estado = "juego"; tiempo = 0; menuSel = 0; avisoT = 0;
+}
+
+/* ---------- Manejo de Teclado --------------------------------------------- */
+function manejarTecla(k) {
+  if (k === "q" && (estado === "titulo" || estado === "pausa")) {
+    salir();
+    return;
+  }
+  if (k === "m") { silencio = !silencio; return; }
+  if (k === "l") { alternarIdioma(); return; }
+
+  const arriba  = k === "up"    || k === "w";
+  const abajo   = k === "down"  || k === "s";
+  const aceptar = k === "enter" || k === " ";
+
+  if (estado === "titulo") {
+    if (arriba)  menuSel = (menuSel + MENU_TITULO.length - 1) % MENU_TITULO.length;
+    else if (abajo) menuSel = (menuSel + 1) % MENU_TITULO.length;
+    else if (k === "1" || k === "2" || k === "3") { menuSel = +k - 1; abrirDelTitulo(); }
+    else if (aceptar) abrirDelTitulo();
+    return;
+  }
+  if (estado === "tienda") {
+    const ids = Object.keys(TIENDA);
+    if (arriba)  menuSel = (menuSel + ids.length - 1) % ids.length;
+    else if (abajo) menuSel = (menuSel + 1) % ids.length;
+    else if (aceptar) comprarMejora(ids[menuSel]);
+    else if (k === "escape" || k === "t") { estado = "titulo"; menuSel = 1; avisoT = 0; }
+    return;
+  }
+  if (estado === "personajes") {
+    if (arriba)  menuSel = (menuSel + PERSONAJES.length - 1) % PERSONAJES.length;
+    else if (abajo) menuSel = (menuSel + 1) % PERSONAJES.length;
+    else if (aceptar) elegirPersonaje(PERSONAJES[menuSel]);
+    else if (k === "escape" || k === "c") { estado = "titulo"; menuSel = 2; avisoT = 0; }
+    return;
+  }
+  if (estado === "fin") {
+    if (aceptar) empezarPartida();
+    else if (k === "t") { estado = "tienda"; menuSel = 0; }
+    else if (k === "escape") { estado = "titulo"; menuSel = 0; }
+    return;
+  }
+  if (estado === "nivel") {
+    if (k === "1") aplicarOpcion(opciones[0]);
+    else if (k === "2" && opciones[1]) aplicarOpcion(opciones[1]);
+    else if (k === "3" && opciones[2]) aplicarOpcion(opciones[2]);
+    else if (arriba) seleccion = (seleccion + opciones.length - 1) % opciones.length;
+    else if (abajo) seleccion = (seleccion + 1) % opciones.length;
+    else if (aceptar) aplicarOpcion(opciones[seleccion]);
+    return;
+  }
+  if (k === "p" || k === "escape") estado = estado === "pausa" ? "juego" : "pausa";
+}
+
+/* Control de movimiento continuo para terminal */
+const activeMovement = { up: 0, down: 0, left: 0, right: 0 };
+
+function procesarEntradaTerminal(ch, key) {
+  if (key && key.ctrl && key.name === "c") {
+    salir();
+    return;
+  }
+
+  let nombre = (key && key.name) || ch || "";
+  nombre = nombre.toLowerCase();
+
+  if (["w", "up"].includes(nombre)) { teclas["w"] = true; teclas["up"] = true; activeMovement.up = 12; }
+  if (["s", "down"].includes(nombre)) { teclas["s"] = true; teclas["down"] = true; activeMovement.down = 12; }
+  if (["a", "left"].includes(nombre)) { teclas["a"] = true; teclas["left"] = true; activeMovement.left = 12; }
+  if (["d", "right"].includes(nombre)) { teclas["d"] = true; teclas["right"] = true; activeMovement.right = 12; }
+
+  manejarTecla(nombre);
+}
+
+/* ---------- Bucle Principal ----------------------------------------------- */
+const MENUS = { titulo: dibujarTitulo, tienda: dibujarTienda, personajes: dibujarPersonajes };
+let ultimo = Date.now(), acumulado = 0;
+
+function tick() {
+  const ahora = Date.now();
+  const dt = Math.min(0.25, (ahora - ultimo) / 1000);
+  ultimo = ahora;
+  if (avisoT > 0) avisoT -= dt;
+
+  for (const dir in activeMovement) {
+    if (activeMovement[dir] > 0) {
+      activeMovement[dir]--;
+      if (activeMovement[dir] <= 0) {
+        teclas[dir] = false;
+        if (dir === "up") teclas["w"] = false;
+        if (dir === "down") teclas["s"] = false;
+        if (dir === "left") teclas["a"] = false;
+        if (dir === "right") teclas["d"] = false;
+      }
+    }
+  }
+
+  if (estado === "juego") {
+    acumulado += dt;
+    let pasos = 0;
+    while (acumulado >= PASO && pasos < 6) {
+      actualizar(PASO);
+      acumulado -= PASO;
+      pasos++;
+      if (estado !== "juego") break;
+    }
+    if (acumulado > 0.5) acumulado = 0;
+  } else {
+    acumulado = 0;
+  }
+
+  limpiar();
+  if (MENUS[estado]) {
+    capa = 1;
+    MENUS[estado]();
+  } else {
+    dibujarMundo();
+    capa = 1;
+    dibujarHUD();
+    if (estado === "nivel") dibujarMenuNivel();
+    if (estado === "pausa") dibujarPausa();
+    if (estado === "fin")   dibujarFin();
+  }
+
+  renderizarTerminal();
+}
+
+/* ---------- Inicialización y Salida --------------------------------------- */
+let intervaloBucle = null;
+
+function iniciar() {
+  cargarProgreso();
+  redimensionar();
+  reiniciar();
+
+  process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[2J");
+
+  readline.emitKeypressEvents(process.stdin);
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+  }
+  process.stdin.resume();
+  process.stdin.on("keypress", procesarEntradaTerminal);
+
+  process.stdout.on("resize", () => {
+    redimensionar();
+    limpiar();
+  });
+
+  intervaloBucle = setInterval(tick, 1000 / 30);
+}
+
+function salir() {
+  if (intervaloBucle) clearInterval(intervaloBucle);
+  process.stdout.write("\x1b[0m\x1b[?25h\x1b[?1049l\n");
+  process.exit(0);
+}
+
+process.on("SIGINT", salir);
+process.on("SIGTERM", salir);
+
+iniciar();
